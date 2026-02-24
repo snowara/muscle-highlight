@@ -30,6 +30,10 @@ export function getMusclePositions(landmarks, canvasW, canvasH) {
   const hipMid = mid(lh, rh);
   const shoulderWidth = Math.abs(rs.x - ls.x);
 
+  const nose = p(0);
+  // Torso length for proportional offsets
+  const torsoLen = Math.sqrt((hipMid.x - shoulderMid.x) ** 2 + (hipMid.y - shoulderMid.y) ** 2);
+
   return {
     chest: [
       lerp(shoulderMid, hipMid, 0.08),
@@ -60,17 +64,19 @@ export function getMusclePositions(landmarks, canvasW, canvasH) {
       lerp(re, rw, 0.3),
       lerp(re, rw, 0.6),
     ],
+    // LATS: mid-back, lateral (sides of torso, below armpit area)
     lats: [
-      { x: ls.x + shoulderWidth * 0.06, y: lerp(ls, lh, 0.3).y },
-      { x: ls.x + shoulderWidth * 0.06, y: lerp(ls, lh, 0.55).y },
-      { x: rs.x - shoulderWidth * 0.06, y: lerp(rs, rh, 0.3).y },
-      { x: rs.x - shoulderWidth * 0.06, y: lerp(rs, rh, 0.55).y },
+      { x: ls.x + shoulderWidth * 0.12, y: lerp(ls, lh, 0.35).y },
+      { x: ls.x + shoulderWidth * 0.12, y: lerp(ls, lh, 0.58).y },
+      { x: rs.x - shoulderWidth * 0.12, y: lerp(rs, rh, 0.35).y },
+      { x: rs.x - shoulderWidth * 0.12, y: lerp(rs, rh, 0.58).y },
     ],
+    // TRAPS: upper back/neck — clearly ABOVE the shoulder line, toward the neck
     traps: [
-      lerp(shoulderMid, ls, 0.35),
-      lerp(shoulderMid, ls, 0.55),
-      lerp(shoulderMid, rs, 0.35),
-      lerp(shoulderMid, rs, 0.55),
+      lerp(shoulderMid, nose, 0.2),
+      lerp(shoulderMid, nose, 0.4),
+      { x: ls.x + shoulderWidth * 0.08, y: lerp(shoulderMid, nose, 0.15).y },
+      { x: rs.x - shoulderWidth * 0.08, y: lerp(shoulderMid, nose, 0.15).y },
     ],
     core: [
       lerp(shoulderMid, hipMid, 0.42),
@@ -78,8 +84,8 @@ export function getMusclePositions(landmarks, canvasW, canvasH) {
       lerp(shoulderMid, hipMid, 0.68),
     ],
     lowerBack: [
-      lerp(shoulderMid, hipMid, 0.6),
-      lerp(shoulderMid, hipMid, 0.78),
+      lerp(shoulderMid, hipMid, 0.65),
+      lerp(shoulderMid, hipMid, 0.82),
     ],
     glutes: [
       { x: lh.x, y: lerp(lh, lk, 0.05).y },

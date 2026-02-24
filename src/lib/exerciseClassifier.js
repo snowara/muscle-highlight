@@ -94,6 +94,16 @@ export function classifyExercise(landmarks) {
 
   const s = {};
 
+  // ── Elbow Asymmetry (one arm bent more = single-arm exercise) ──
+  const elbowAsym = Math.abs(elbowL - elbowR);
+
+  // ── Wrist below elbow (pulling motion indicator) ──
+  const wristBelowElbow = (lw.y > le.y && rw.y > re.y);
+
+  // ── Elbow behind shoulder (pulling/rowing motion) ──
+  // When elbow.x is further from center than shoulder.x (arms pulled back)
+  const elbowsBehind = (le.y > ls.y + 0.02) || (re.y > rs.y + 0.02);
+
   // ─── PLANK: horizontal body, straight arms & legs ───
   s.plank = 0;
   if (isHorizontal) s.plank += 45;
@@ -101,13 +111,13 @@ export function classifyExercise(landmarks) {
   if (elbow > 140) s.plank += 20;
   if (hip > 150) s.plank += 15;
 
-  // ─── BENCH PRESS: horizontal/leaning, arms at chest, elbow bent ───
+  // ─── BENCH PRESS: horizontal/leaning BACK, arms at chest, elbow bent ───
   s.benchPress = 0;
   if (isHorizontal) s.benchPress += 30;
-  if (isLeaning) s.benchPress += 15;
-  if (elbow > 60 && elbow < 150) s.benchPress += 25;
-  if (shoulder > 40 && shoulder < 120) s.benchPress += 20;
+  if (elbow > 60 && elbow < 150) s.benchPress += 20;
+  if (shoulder > 40 && shoulder < 120) s.benchPress += 15;
   if (armSpread > 1.5) s.benchPress += 10;
+  if (knee > 100) s.benchPress += 5; // legs relatively straight on bench
 
   // ─── LEG CURL: horizontal, knee deeply bent, hip straight ───
   s.legCurl = 0;
@@ -117,19 +127,53 @@ export function classifyExercise(landmarks) {
 
   // ─── SQUAT: upright, deep knee + hip flexion, wrists NOT overhead ───
   s.squat = 0;
-  if (isUpright) s.squat += 15;
-  if (knee < 140) s.squat += 20;
+  if (isUpright) s.squat += 20;
+  if (knee < 140) s.squat += 15;
   if (knee < 110) s.squat += 20;
-  if (hip < 140) s.squat += 15;
+  if (hip < 140) s.squat += 10;
   if (hip < 110) s.squat += 10;
-  if (!wristAboveShoulder) s.squat += 10;
+  if (!wristAboveShoulder && !wristBelowHip) s.squat += 5;
+  // Penalize if torso is leaning forward (more likely deadlift/row)
+  if (isLeaning) s.squat -= 15;
 
-  // ─── DEADLIFT: leaning torso, hips hinged, knees slightly bent ───
+  // ─── DEADLIFT: leaning torso, hips hinged, knees slightly bent, arms STRAIGHT down ───
   s.deadlift = 0;
-  if (isLeaning) s.deadlift += 30;
-  if (hip < 130) s.deadlift += 25;
-  if (knee > 110 && knee < 165) s.deadlift += 20;
+  if (isLeaning) s.deadlift += 25;
+  if (hip < 130) s.deadlift += 20;
+  if (knee > 120 && knee < 170) s.deadlift += 15;
   if (wristBelowHip) s.deadlift += 15;
+  if (elbow > 150) s.deadlift += 15; // arms straight (not pulling)
+  // Penalize if elbows are bent (more likely a row)
+  if (elbow < 120) s.deadlift -= 15;
+
+  // ─── BARBELL/DUMBBELL ROW: leaning torso, elbows BENT, pulling motion ───
+  s.barbellRow = 0;
+  if (isLeaning) s.barbellRow += 30;
+  if (torsoFromVertical >= 30 && torsoFromVertical < 75) s.barbellRow += 10;
+  if (elbow < 130) s.barbellRow += 25; // elbows bent = pulling
+  if (elbow < 100) s.barbellRow += 10;
+  if (shoulder > 30 && shoulder < 90) s.barbellRow += 15; // arms pulled back
+  if (wristAtChest || wristBelowHip) s.barbellRow += 10;
+  // Penalize if arms straight (deadlift, not row)
+  if (elbow > 155) s.barbellRow -= 20;
+
+  // ─── DUMBBELL ROW: same as barbell row but with elbow asymmetry (single arm) ───
+  s.dumbbellRow = 0;
+  if (isLeaning) s.dumbbellRow += 25;
+  if (torsoFromVertical >= 30 && torsoFromVertical < 75) s.dumbbellRow += 10;
+  if (elbow < 130) s.dumbbellRow += 20;
+  if (elbowAsym > 15) s.dumbbellRow += 20; // one arm pulling, other on bench
+  if (shoulder > 30 && shoulder < 90) s.dumbbellRow += 10;
+  if (wristAtChest || wristBelowHip) s.dumbbellRow += 5;
+  if (elbow > 155) s.dumbbellRow -= 15;
+
+  // ─── SEATED ROW: upright/slight lean, elbows bent, pulling ───
+  s.seatedRow = 0;
+  if (isUpright || isLeaning) s.seatedRow += 10;
+  if (elbow < 110) s.seatedRow += 20;
+  if (shoulder > 20 && shoulder < 70) s.seatedRow += 15;
+  if (knee > 130) s.seatedRow += 10; // legs extended (seated)
+  if (wristAtChest) s.seatedRow += 15;
 
   // ─── SHOULDER PRESS: upright, wrists ABOVE shoulders ───
   s.shoulderPress = 0;
@@ -140,10 +184,12 @@ export function classifyExercise(landmarks) {
 
   // ─── BICEP CURL: upright, elbows tight, wrists near shoulder height ───
   s.bicepCurl = 0;
-  if (isUpright) s.bicepCurl += 10;
+  if (isUpright) s.bicepCurl += 15;
   if (elbow < 80) s.bicepCurl += 35;
-  if (shoulder < 35) s.bicepCurl += 25;
+  if (shoulder < 35) s.bicepCurl += 25; // elbows close to body
   if (wristAtChest) s.bicepCurl += 15;
+  // Penalize if leaning (more likely row)
+  if (isLeaning) s.bicepCurl -= 10;
 
   // ─── LAT PULLDOWN: arms wide above, pulling down ───
   s.latPulldown = 0;
@@ -153,6 +199,13 @@ export function classifyExercise(landmarks) {
   if (elbow < 130 && elbow > 60) s.latPulldown += 15;
   if (knee > 140) s.latPulldown += 5; // usually seated
 
+  // ─── PULL UP: similar to lat pulldown but more vertical ───
+  s.pullUp = 0;
+  if (wristAboveShoulder) s.pullUp += 25;
+  if (armSpread > 1.5) s.pullUp += 15;
+  if (shoulder > 110) s.pullUp += 20;
+  if (elbow < 120) s.pullUp += 15;
+
   // ─── LUNGE: upright, big knee asymmetry ───
   s.lunge = 0;
   if (isUpright) s.lunge += 10;
@@ -160,12 +213,15 @@ export function classifyExercise(landmarks) {
   if (kneeAsym > 50) s.lunge += 15;
   if (knee < 150) s.lunge += 10;
 
-  // ─── LEG PRESS: reclined, knees bent, pushing ───
+  // ─── LEG PRESS: reclined, knees deeply bent, pushing ───
   s.legPress = 0;
-  if (isLeaning || isHorizontal) s.legPress += 15;
-  if (knee < 120) s.legPress += 25;
-  if (hip < 100) s.legPress += 25;
-  if (shoulder < 40) s.legPress += 10; // arms at side
+  if (isHorizontal) s.legPress += 20;
+  if (knee < 110) s.legPress += 25;
+  if (hip < 90) s.legPress += 25;
+  if (shoulder < 40) s.legPress += 10;
+  // Penalize if standing/leaning (more likely squat/deadlift/row)
+  if (isUpright) s.legPress -= 10;
+  if (isLeaning && !isHorizontal) s.legPress -= 10;
 
   // ─── CABLE FLY: upright, arms wide at chest level ───
   s.cableFly = 0;
@@ -180,8 +236,15 @@ export function classifyExercise(landmarks) {
   if (isUpright) s.lateralRaise += 10;
   if (armSpread > 2.0) s.lateralRaise += 25;
   if (wristAtShoulder) s.lateralRaise += 30;
-  if (elbow > 140) s.lateralRaise += 15; // arms fairly straight
+  if (elbow > 140) s.lateralRaise += 15;
   if (shoulder > 70 && shoulder < 110) s.lateralRaise += 10;
+
+  // ─── HIP THRUST: horizontal/leaning, knees bent, hips extended ───
+  s.hipThrust = 0;
+  if (isHorizontal || isLeaning) s.hipThrust += 15;
+  if (knee > 70 && knee < 120) s.hipThrust += 20;
+  if (hip > 140) s.hipThrust += 25;
+  if (shoulder < 50) s.hipThrust += 10;
 
   // ── Apply learned boosts from user corrections ──
   const boosts = getLearnedBoosts(landmarks);

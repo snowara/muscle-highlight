@@ -53,12 +53,18 @@ function drawShapedGlow(ctx, point, color, radius, alpha, shape) {
   ctx.restore();
 }
 
-function drawMuscleLabel(ctx, points, label, color, canvasW) {
+// Anatomical render order (deep → superficial). Later = on top visually.
+const RENDER_ORDER = [
+  "lowerBack", "core", "hamstrings", "quadriceps", "calves", "glutes",
+  "lats", "forearms", "biceps", "triceps", "chest", "shoulders", "traps",
+];
+
+function drawMuscleLabel(ctx, points, label, color, canvasW, placedLabels) {
   if (!points || points.length === 0) return;
 
   // find centroid of all points
-  const cx = points.reduce((s, p) => s + p.x, 0) / points.length;
-  const cy = points.reduce((s, p) => s + p.y, 0) / points.length;
+  let cx = points.reduce((s, p) => s + p.x, 0) / points.length;
+  let cy = points.reduce((s, p) => s + p.y, 0) / points.length;
 
   const fontSize = Math.max(10, Math.min(14, canvasW * 0.022));
 
@@ -67,28 +73,55 @@ function drawMuscleLabel(ctx, points, label, color, canvasW) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // text background pill
   const text = label.toUpperCase();
   const metrics = ctx.measureText(text);
   const pw = metrics.width + 12;
   const ph = fontSize + 6;
-  const px = cx - pw / 2;
-  const py = cy - fontSize * 1.8 - ph / 2;
 
+  // Label position (above the centroid by default)
+  let lx = cx - pw / 2;
+  let ly = cy - fontSize * 1.8 - ph / 2;
+
+  // Anti-overlap: check against already placed labels and offset if needed
+  if (placedLabels) {
+    const offsets = [
+      [0, 0], [0, -(ph + 4)], [0, (ph + 4)],
+      [pw * 0.6, 0], [-(pw * 0.6), 0],
+      [pw * 0.5, -(ph + 2)], [-(pw * 0.5), -(ph + 2)],
+      [pw * 0.5, (ph + 2)], [-(pw * 0.5), (ph + 2)],
+    ];
+
+    for (const [ox, oy] of offsets) {
+      const testX = lx + ox;
+      const testY = ly + oy;
+      const hasOverlap = placedLabels.some((r) =>
+        testX < r.x + r.w + 4 && testX + pw + 4 > r.x &&
+        testY < r.y + r.h + 4 && testY + ph + 4 > r.y
+      );
+      if (!hasOverlap) {
+        lx = testX;
+        ly = testY;
+        break;
+      }
+    }
+    placedLabels.push({ x: lx, y: ly, w: pw, h: ph });
+  }
+
+  // pill background
   ctx.fillStyle = "rgba(0,0,0,0.55)";
   ctx.beginPath();
-  ctx.roundRect(px, py, pw, ph, ph / 2);
+  ctx.roundRect(lx, ly, pw, ph, ph / 2);
   ctx.fill();
 
   // colored dot
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(px + 8, py + ph / 2, 3, 0, Math.PI * 2);
+  ctx.arc(lx + 8, ly + ph / 2, 3, 0, Math.PI * 2);
   ctx.fill();
 
   // text
   ctx.fillStyle = "#fff";
-  ctx.fillText(text, cx + 4, py + ph / 2);
+  ctx.fillText(text, lx + pw / 2 + 4, ly + ph / 2);
 
   ctx.restore();
 }
@@ -111,40 +144,44 @@ export function renderMuscleOverlay(
   ctx.save();
   ctx.globalCompositeOperation = "screen";
 
-  // primary muscles
-  exercise.primary.forEach((muscleKey) => {
-    const region = MUSCLE_REGIONS[muscleKey];
-    const points = positions[muscleKey];
-    const shape = MUSCLE_SHAPES[muscleKey];
-    if (!region || !points) return;
-    const radius = 28 * bodyScale * (shape?.scale || 1);
-    const alpha = 0.5 * glowIntensity * pulse;
-    points.forEach((pt) => drawShapedGlow(ctx, pt, region.color, radius, alpha, shape));
+  // Collect all active muscles with their activation level
+  const activeMuscles = new Map();
+  exercise.primary.forEach((k) => activeMuscles.set(k, "primary"));
+  exercise.secondary.forEach((k) => {
+    if (!activeMuscles.has(k)) activeMuscles.set(k, "secondary");
   });
 
-  // secondary muscles
-  exercise.secondary.forEach((muscleKey) => {
+  // Render in anatomical depth order (deep muscles first, superficial last)
+  RENDER_ORDER.forEach((muscleKey) => {
+    const level = activeMuscles.get(muscleKey);
+    if (!level) return;
     const region = MUSCLE_REGIONS[muscleKey];
     const points = positions[muscleKey];
     const shape = MUSCLE_SHAPES[muscleKey];
     if (!region || !points) return;
-    const radius = 20 * bodyScale * (shape?.scale || 1);
-    const alpha = 0.25 * glowIntensity * pulse;
+
+    const isPrimary = level === "primary";
+    const radius = (isPrimary ? 28 : 20) * bodyScale * (shape?.scale || 1);
+    const alpha = (isPrimary ? 0.5 : 0.25) * glowIntensity * pulse;
     points.forEach((pt) => drawShapedGlow(ctx, pt, region.color, radius, alpha, shape));
   });
 
   ctx.restore();
 
-  // muscle name labels
+  // muscle name labels with anti-overlap
   if (showLabels) {
     const drawnLabels = new Set();
-    exercise.primary.forEach((muscleKey) => {
+    const placedLabels = []; // bounding boxes for collision detection
+
+    // Draw primary labels first (in render order for consistent placement)
+    RENDER_ORDER.forEach((muscleKey) => {
+      if (!exercise.primary.includes(muscleKey)) return;
       if (drawnLabels.has(muscleKey)) return;
       drawnLabels.add(muscleKey);
       const region = MUSCLE_REGIONS[muscleKey];
       const points = positions[muscleKey];
       if (!region || !points) return;
-      drawMuscleLabel(ctx, points, region.label, region.color, canvasW);
+      drawMuscleLabel(ctx, points, region.label, region.color, canvasW, placedLabels);
     });
   }
 
