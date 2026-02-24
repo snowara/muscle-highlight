@@ -2,7 +2,6 @@ import { useRef, useEffect } from "react";
 import { renderMuscleOverlay } from "../lib/muscleRenderer";
 import { EXERCISE_DB } from "../data/exercises";
 import { MUSCLE_REGIONS } from "../data/muscles";
-import BodyDiagram from "./BodyDiagram";
 
 export default function CanvasView({
   image, landmarks, exerciseKey, canvasSize,
@@ -57,18 +56,6 @@ export default function CanvasView({
           borderRadius: 16, display: "block",
         }}
       />
-
-      {/* body diagram - top right */}
-      {exercise && (
-        <div style={{
-          position: "absolute", top: 12, right: 12,
-          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(10px)",
-          borderRadius: 12, padding: "8px 6px",
-          display: "flex", flexDirection: "column", alignItems: "center",
-        }}>
-          <BodyDiagram exerciseKey={exerciseKey} size={48} />
-        </div>
-      )}
 
       {/* exercise badge - top left */}
       {exercise && (

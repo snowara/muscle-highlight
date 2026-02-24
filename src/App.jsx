@@ -4,6 +4,7 @@ import CanvasView from "./components/CanvasView";
 import ExerciseGrid from "./components/ExerciseGrid";
 import ControlPanel from "./components/ControlPanel";
 import MuscleInfo from "./components/MuscleInfo";
+import AnatomyPanel from "./components/AnatomyPanel";
 import BrandSettings from "./components/BrandSettings";
 import VideoUploadArea from "./components/VideoUploadArea";
 import VideoProcessor from "./components/VideoProcessor";
@@ -240,8 +241,15 @@ export default function App() {
           </div>
         </div>
 
+        {/* Anatomy diagram panel */}
+        <div className="anatomy-panel" style={styles.anatomyPanel}>
+          <AnatomyPanel exerciseKey={selectedExercise} brandColor={brand.brandColor} />
+        </div>
+
         <div className="side-panel" style={styles.panel}>
           <ExerciseGrid selected={selectedExercise} onSelect={handleExerciseSelect} brandColor={brand.brandColor} />
+          <div style={styles.divider} />
+          <MuscleInfo exerciseKey={selectedExercise} mediapipeStatus={mediapipeStatus} autoDetected={autoDetected} onSelectExercise={handleExerciseSelect} />
           <div style={styles.divider} />
           <ControlPanel
             glowIntensity={glowIntensity} setGlowIntensity={setGlowIntensity}
@@ -249,8 +257,6 @@ export default function App() {
             showLabels={showLabels} setShowLabels={setShowLabels}
             brandColor={brand.brandColor}
           />
-          <div style={styles.divider} />
-          <MuscleInfo exerciseKey={selectedExercise} mediapipeStatus={mediapipeStatus} autoDetected={autoDetected} onSelectExercise={handleExerciseSelect} />
           <div style={styles.divider} />
           <BrandSettings brand={brand} setBrand={setBrand} />
         </div>
@@ -280,8 +286,19 @@ const styles = {
     flexDirection: "column",
     gap: 16,
   },
+  anatomyPanel: {
+    width: 280,
+    flexShrink: 0,
+    display: "flex",
+    flexDirection: "column",
+    padding: 16,
+    background: "rgba(255,255,255,0.025)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    borderRadius: 14,
+    alignSelf: "flex-start",
+  },
   panel: {
-    width: 300,
+    width: 280,
     flexShrink: 0,
     display: "flex",
     flexDirection: "column",
