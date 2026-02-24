@@ -1,0 +1,15 @@
+export const MUSCLE_REGIONS = {
+  chest:      { label: "가슴",     color: "#FF3B5C" },
+  shoulders:  { label: "어깨",     color: "#FF6B35" },
+  biceps:     { label: "이두근",   color: "#FF8C42" },
+  triceps:    { label: "삼두근",   color: "#FFA726" },
+  forearms:   { label: "전완근",   color: "#FFD54F" },
+  lats:       { label: "광배근",   color: "#7C4DFF" },
+  traps:      { label: "승모근",   color: "#E040FB" },
+  core:       { label: "코어",     color: "#00E5FF" },
+  lowerBack:  { label: "하부등",   color: "#1DE9B6" },
+  glutes:     { label: "둔근",     color: "#69F0AE" },
+  quadriceps: { label: "대퇴사두", color: "#00E676" },
+  hamstrings: { label: "햄스트링", color: "#76FF03" },
+  calves:     { label: "종아리",   color: "#C6FF00" },
+};
