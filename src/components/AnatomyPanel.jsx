@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { EXERCISE_DB } from "../data/exercises";
 import { MUSCLE_REGIONS } from "../data/muscles";
-import { getMuscleDisplayColor, CORRECT_COLOR, INCORRECT_COLOR } from "../lib/poseQualityAnalyzer";
+import { getMuscleDisplayColor, getMuscleQuality, CORRECT_COLOR, INCORRECT_COLOR } from "../lib/poseAnalyzer";
 
 // ── Determine best view (front/back) based on exercise's primary muscles ──
 const BACK_MUSCLES = new Set(["lats", "traps", "lowerBack", "hamstrings", "glutes"]);
@@ -9,7 +9,7 @@ const BACK_MUSCLES = new Set(["lats", "traps", "lowerBack", "hamstrings", "glute
 function bestView(exerciseKey) {
   const ex = EXERCISE_DB[exerciseKey];
   if (!ex) return "front";
-  const primaryKeys = ex.primary;
+  const primaryKeys = Object.keys(ex.primary);
   const backCount = primaryKeys.filter((m) => BACK_MUSCLES.has(m)).length;
   return backCount > primaryKeys.length / 2 ? "back" : "front";
 }
@@ -169,8 +169,9 @@ export default function AnatomyPanel({ exerciseKey, brandColor, poseQuality }) {
   const activeView = view || autoView;
 
   const exercise = EXERCISE_DB[exerciseKey];
-  const primarySet = useMemo(() => new Set(Object.keys(exercise?.primary || {})), [exerciseKey]);
-  const secondarySet = useMemo(() => new Set(Object.keys(exercise?.secondary || {})), [exerciseKey]);
+  const primarySet = useMemo(() => new Set(exercise?.primary || []), [exerciseKey]);
+  const secondarySet = useMemo(() => new Set(exercise?.secondary || []), [exerciseKey]);
+  const muscleQualityMap = poseQuality ? getMuscleQuality(poseQuality) : null;
 
   const paths = activeView === "back" ? BACK_PATHS : FRONT_PATHS;
   const outline = activeView === "back" ? BACK_OUTLINE : FRONT_OUTLINE;
@@ -302,7 +303,7 @@ export default function AnatomyPanel({ exerciseKey, brandColor, poseQuality }) {
           if (!secondarySet.has(key) || primarySet.has(key)) return null;
           const pathArr = Array.isArray(paths[key]) ? paths[key] : (paths[key] ? [paths[key]] : []);
           if (pathArr.length === 0) return null;
-          const mq = poseQuality?.muscleQuality?.[key];
+          const mq = muscleQualityMap?.[key];
           const color = mq ? getMuscleDisplayColor(mq.score) : DEFAULT_SECONDARY;
           return pathArr.map((d, i) => (
             <path
@@ -322,7 +323,7 @@ export default function AnatomyPanel({ exerciseKey, brandColor, poseQuality }) {
           if (!primarySet.has(key)) return null;
           const pathArr = Array.isArray(paths[key]) ? paths[key] : (paths[key] ? [paths[key]] : []);
           if (pathArr.length === 0) return null;
-          const mq = poseQuality?.muscleQuality?.[key];
+          const mq = muscleQualityMap?.[key];
           const color = mq ? getMuscleDisplayColor(mq.score) : DEFAULT_PRIMARY;
           return pathArr.map((d, i) => (
             <path
@@ -343,7 +344,7 @@ export default function AnatomyPanel({ exerciseKey, brandColor, poseQuality }) {
           const isRight = x > 130;
           const labelX = isRight ? 210 : 18;
           const textAnchor = isRight ? "start" : "end";
-          const mq = poseQuality?.muscleQuality?.[key];
+          const mq = muscleQualityMap?.[key];
           const color = mq
             ? getMuscleDisplayColor(mq.score)
             : (isPrimary ? DEFAULT_PRIMARY : DEFAULT_SECONDARY);
@@ -398,20 +399,20 @@ export default function AnatomyPanel({ exerciseKey, brandColor, poseQuality }) {
         }}>
           <div style={{
             fontSize: 36, fontWeight: 800, lineHeight: 1,
-            color: poseQuality.overallScore >= 80
+            color: poseQuality.score >= 80
               ? CORRECT_COLOR
-              : poseQuality.overallScore >= 60
+              : poseQuality.score >= 60
                 ? "#FF8C42"
                 : INCORRECT_COLOR,
             textShadow: `0 0 16px ${
-              poseQuality.overallScore >= 80
+              poseQuality.score >= 80
                 ? CORRECT_COLOR + "66"
-                : poseQuality.overallScore >= 60
+                : poseQuality.score >= 60
                   ? "#FF8C42" + "66"
                   : INCORRECT_COLOR + "66"
             }`,
           }}>
-            {poseQuality.overallScore}
+            {poseQuality.score}
           </div>
           <div style={{
             fontSize: 10, fontWeight: 600, letterSpacing: 1.5,
@@ -424,13 +425,13 @@ export default function AnatomyPanel({ exerciseKey, brandColor, poseQuality }) {
             marginTop: 4,
             padding: "3px 12px", borderRadius: 10,
             fontSize: 10, fontWeight: 700,
-            background: poseQuality.isGoodForm
+            background: poseQuality.status !== 'bad'
               ? CORRECT_COLOR + "18"
               : INCORRECT_COLOR + "18",
-            color: poseQuality.isGoodForm ? CORRECT_COLOR : INCORRECT_COLOR,
-            border: `1px solid ${poseQuality.isGoodForm ? CORRECT_COLOR + "30" : INCORRECT_COLOR + "30"}`,
+            color: poseQuality.status !== 'bad' ? CORRECT_COLOR : INCORRECT_COLOR,
+            border: `1px solid ${poseQuality.status !== 'bad' ? CORRECT_COLOR + "30" : INCORRECT_COLOR + "30"}`,
           }}>
-            {poseQuality.isGoodForm ? "Good Form" : "Needs Fix"}
+            {poseQuality.status !== 'bad' ? "Good Form" : "Needs Fix"}
           </div>
         </div>
       )}

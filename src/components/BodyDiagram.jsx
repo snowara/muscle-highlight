@@ -62,8 +62,8 @@ export default function BodyDiagram({ exerciseKey, size = 120 }) {
   const exercise = EXERCISE_DB[exerciseKey];
   if (!exercise) return null;
 
-  const activePrimary = new Set(exercise.primary);
-  const activeSecondary = new Set(exercise.secondary);
+  const activePrimary = new Set(Object.keys(exercise.primary));
+  const activeSecondary = new Set(Object.keys(exercise.secondary));
 
   function getMuscleColor(key) {
     if (activePrimary.has(key)) return MUSCLE_REGIONS[key]?.color || "#fff";

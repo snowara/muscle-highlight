@@ -1,4 +1,6 @@
-const COLOR_PRESETS = ["#00E5FF", "#FF3B5C", "#7C4DFF", "#00E676", "#FF6B35", "#FFD700"];
+import { COLOR_PRESETS } from "../lib/compositeExport";
+
+const PRESET_LABELS = ["시안", "레드", "퍼플", "그린", "오렌지", "골드"];
 
 export default function BrandSettings({ brand, setBrand }) {
   const update = (key, value) => setBrand((prev) => ({ ...prev, [key]: value }));
@@ -44,20 +46,42 @@ export default function BrandSettings({ brand, setBrand }) {
       {/* color presets */}
       <div>
         <label style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, display: "block", marginBottom: 6 }}>브랜드 컬러</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          {COLOR_PRESETS.map((color) => (
-            <button
-              key={color}
-              onClick={() => update("brandColor", color)}
-              style={{
-                width: 28, height: 28, borderRadius: "50%", border: "none", cursor: "pointer",
-                background: color,
-                outline: brand.brandColor === color ? "2px solid #fff" : "2px solid transparent",
-                outlineOffset: 2,
-                transition: "outline 0.15s ease",
-              }}
-            />
-          ))}
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8,
+        }}>
+          {COLOR_PRESETS.map((color, i) => {
+            const isSelected = brand.brandColor === color;
+            return (
+              <button
+                key={color}
+                onClick={() => update("brandColor", color)}
+                title={PRESET_LABELS[i]}
+                style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                  padding: 4, border: "none", cursor: "pointer",
+                  background: "transparent",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <div style={{
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: color,
+                  outline: isSelected ? "2.5px solid #fff" : "2px solid transparent",
+                  outlineOffset: 2,
+                  boxShadow: isSelected ? `0 0 12px ${color}66` : "none",
+                  transition: "all 0.15s ease",
+                  transform: isSelected ? "scale(1.1)" : "scale(1)",
+                }} />
+                <span style={{
+                  fontSize: 8, fontWeight: isSelected ? 700 : 400,
+                  color: isSelected ? color : "rgba(255,255,255,0.35)",
+                  transition: "color 0.15s ease",
+                }}>
+                  {PRESET_LABELS[i]}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

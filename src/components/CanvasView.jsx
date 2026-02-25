@@ -2,18 +2,21 @@ import { useRef, useEffect } from "react";
 import { renderMuscleOverlay } from "../lib/muscleRenderer";
 import { EXERCISE_DB } from "../data/exercises";
 import { MUSCLE_REGIONS } from "../data/muscles";
+import { getMuscleDisplayColor, getMuscleQuality, CORRECT_COLOR, INCORRECT_COLOR } from "../lib/poseAnalyzer";
 
 export default function CanvasView({
   image, landmarks, exerciseKey, canvasSize,
   glowIntensity, showSkeleton, showLabels = true,
   canvasRef: externalRef,
+  poseQuality = null,
 }) {
   const internalRef = useRef(null);
   const canvasRef = externalRef || internalRef;
   const animRef = useRef(null);
 
   const exercise = EXERCISE_DB[exerciseKey];
-  const allMuscles = [...(exercise?.primary || []), ...(exercise?.secondary || [])];
+  const allMuscles = [...Object.keys(exercise?.primary || {}), ...Object.keys(exercise?.secondary || {})];
+  const muscleQualityMap = poseQuality ? getMuscleQuality(poseQuality) : null;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -33,6 +36,7 @@ export default function CanvasView({
           showSkeleton,
           showLabels,
           time,
+          poseQuality,
         });
       }
 
@@ -43,7 +47,7 @@ export default function CanvasView({
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
-  }, [image, landmarks, exerciseKey, canvasSize, glowIntensity, showSkeleton, showLabels]);
+  }, [image, landmarks, exerciseKey, canvasSize, glowIntensity, showSkeleton, showLabels, poseQuality]);
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
@@ -69,13 +73,13 @@ export default function CanvasView({
           <div>
             <div style={{ color: "#fff", fontSize: 14, fontWeight: 700, lineHeight: 1.2 }}>{exercise.name}</div>
             <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 10, marginTop: 2 }}>
-              {exercise.primary.map(k => MUSCLE_REGIONS[k]?.label).filter(Boolean).join(" · ")}
+              {Object.keys(exercise.primary).map(k => MUSCLE_REGIONS[k]?.label).filter(Boolean).join(" · ")}
             </div>
           </div>
         </div>
       )}
 
-      {/* muscle legend - bottom */}
+      {/* muscle legend - bottom with quality colors */}
       {allMuscles.length > 0 && (
         <div style={{
           position: "absolute", bottom: 12, left: 12, right: 12,
@@ -87,13 +91,16 @@ export default function CanvasView({
           {allMuscles.map((key) => {
             const m = MUSCLE_REGIONS[key];
             if (!m) return null;
-            const isPrimary = exercise.primary.includes(key);
+            const isPrimary = (key in exercise.primary);
+            const mq = muscleQualityMap?.[key];
+            const color = mq ? getMuscleDisplayColor(mq.score) : (poseQuality?.status !== 'bad' ? CORRECT_COLOR : m.color);
+            const qualityLabel = mq ? (mq.isCorrect ? "OK" : "FIX") : "";
             return (
               <div key={key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <div style={{
                   width: isPrimary ? 8 : 6, height: isPrimary ? 8 : 6,
-                  borderRadius: "50%", background: m.color,
-                  boxShadow: isPrimary ? `0 0 8px ${m.color}` : "none",
+                  borderRadius: "50%", background: color,
+                  boxShadow: isPrimary ? `0 0 8px ${color}` : "none",
                 }} />
                 <span style={{
                   color: isPrimary ? "#fff" : "rgba(255,255,255,0.45)",
@@ -101,12 +108,12 @@ export default function CanvasView({
                 }}>
                   {m.label}
                 </span>
-                {isPrimary && (
+                {isPrimary && qualityLabel && (
                   <span style={{
                     fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
-                    background: m.color + "33", color: m.color,
+                    background: color + "33", color: color,
                   }}>
-                    HIGH
+                    {qualityLabel}
                   </span>
                 )}
               </div>

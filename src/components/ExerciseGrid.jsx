@@ -74,17 +74,24 @@ export default function ExerciseGrid({ selected, onSelect, brandColor, showAutoO
               key={key}
               onClick={() => onSelect(key)}
               style={{
-                display: "flex", alignItems: "center", gap: 5,
-                padding: "8px 8px", borderRadius: 8, border: "none", cursor: "pointer",
-                background: isActive ? `${brandColor}22` : "rgba(255,255,255,0.03)",
-                outline: isActive ? `1.5px solid ${brandColor}` : "1px solid rgba(255,255,255,0.06)",
-                transition: "all 0.12s ease",
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "10px 10px",
+                minHeight: 44,
+                borderRadius: 10, border: "none", cursor: "pointer",
+                background: isActive
+                  ? `linear-gradient(135deg, ${brandColor}22, ${brandColor}11)`
+                  : "rgba(255,255,255,0.03)",
+                outline: isActive ? `2px solid ${brandColor}` : "1px solid rgba(255,255,255,0.06)",
+                outlineOffset: isActive ? -1 : 0,
+                boxShadow: isActive ? `0 0 12px ${brandColor}33, inset 0 0 8px ${brandColor}11` : "none",
+                transition: "all 0.15s ease",
+                WebkitTapHighlightColor: "transparent",
               }}
             >
-              <span style={{ fontSize: 13 }}>{ex.icon}</span>
+              <span style={{ fontSize: 15 }}>{ex.icon}</span>
               <span style={{
                 color: isActive ? brandColor : "rgba(255,255,255,0.7)",
-                fontSize: 11, fontWeight: isActive ? 600 : 400,
+                fontSize: 12, fontWeight: isActive ? 700 : 400,
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 textAlign: "left",
               }}>
@@ -107,12 +114,15 @@ function CatTab({ label, active, onClick, brandColor }) {
     <button
       onClick={onClick}
       style={{
-        padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer",
+        padding: "6px 12px",
+        minHeight: 32,
+        borderRadius: 6, border: "none", cursor: "pointer",
         background: active ? `${brandColor}20` : "transparent",
         color: active ? brandColor : "rgba(255,255,255,0.45)",
-        fontSize: 10, fontWeight: active ? 700 : 400,
+        fontSize: 11, fontWeight: active ? 700 : 400,
         whiteSpace: "nowrap",
         outline: active ? `1px solid ${brandColor}30` : "none",
+        WebkitTapHighlightColor: "transparent",
       }}
     >
       {label}
