@@ -53,8 +53,8 @@ export default function VideoPlayer({
           showSkeleton,
           showLabels: true,
           time: timestamp / 1000,
+          poseResult: prevPr,
           muscleStates: prevPr.muscleStates,
-          poseStatus: prevPr.status,
         });
       }
 
@@ -170,14 +170,26 @@ export default function VideoPlayer({
 
   return (
     <div className="video-container">
-      {/* visibility:hidden + position:absolute로 프레임 디코딩 유지 */}
+      {/* 비디오를 캔버스 뒤에 배치 (프레임 디코딩 보장, 사용자에게 안 보임) */}
       <video
         ref={videoRef}
-        style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          zIndex: 0,
+        }}
         muted
         playsInline
       />
-      <canvas ref={canvasRef} className="main-canvas" />
+      <canvas
+        ref={canvasRef}
+        className="main-canvas"
+        style={{ position: "relative", zIndex: 1 }}
+      />
 
       <div className="video-controls">
         <button className="btn-icon" onClick={togglePlay}>

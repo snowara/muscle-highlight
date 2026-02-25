@@ -48,8 +48,8 @@ export default function CanvasView({
           showSkeleton,
           showLabels: true,
           time: time / 1000,
+          poseResult: poseResult || null,
           muscleStates: poseResult?.muscleStates || null,
-          poseStatus: poseResult?.status || "correct",
         });
       }
 

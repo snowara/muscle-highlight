@@ -6,7 +6,7 @@
  */
 
 const VISION_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
-const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
 
 let poseLandmarker = null;
 let currentMode = null;
@@ -38,6 +38,13 @@ async function _doInit() {
 
   const vision = await FilesetResolver.forVisionTasks(VISION_CDN);
 
+  const commonOpts = {
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.3,
+    minPosePresenceConfidence: 0.3,
+    minTrackingConfidence: 0.3,
+  };
+
   // GPU 시도
   try {
     poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
@@ -46,10 +53,10 @@ async function _doInit() {
         delegate: "GPU",
       },
       runningMode: "IMAGE",
-      numPoses: 1,
+      ...commonOpts,
     });
     currentMode = "IMAGE";
-    console.log("[PoseDetector] GPU 모드 초기화 성공");
+    console.log("[PoseDetector] GPU + Full 모델 초기화 성공");
     return;
   } catch (gpuErr) {
     console.warn("[PoseDetector] GPU 실패, CPU fallback:", gpuErr);
@@ -62,10 +69,10 @@ async function _doInit() {
       delegate: "CPU",
     },
     runningMode: "IMAGE",
-    numPoses: 1,
+    ...commonOpts,
   });
   currentMode = "IMAGE";
-  console.log("[PoseDetector] CPU 모드 초기화 성공");
+  console.log("[PoseDetector] CPU + Full 모델 초기화 성공");
 }
 
 // ── 모드 전환 (뮤텍스로 보호) ─────────────────────────────
@@ -111,55 +118,82 @@ export async function detectImage(imageElement) {
   return { landmarks: generateFallbackLandmarks(), isFallback: true };
 }
 
-// ── 영상 프레임 감지 (VIDEO 모드, 15fps 제한) ──────────────
+// ── 영상 프레임 감지 (15fps 제한) ──────────────────────────
+// VIDEO 모드 시도 → 실패 시 IMAGE 모드 fallback (더 안정적)
 
 let lastVideoDetectTime = 0;
 let lastVideoTimestamp = -1;
+let videoModeWorking = null; // null=미확인, true=VIDEO, false=IMAGE fallback
 const MIN_FRAME_INTERVAL = 1000 / 15; // ~66ms
 
 export async function detectVideoFrame(videoElement, timestamp) {
   if (!poseLandmarker) {
+    console.warn("[PoseDetector] poseLandmarker 미초기화");
     return { landmarks: generateFallbackLandmarks(), isFallback: true };
   }
 
-  // timestamp를 정수로 (MediaPipe 요구사항)
-  const ts = Math.round(timestamp);
+  const now = performance.now();
 
   // 15fps 스로틀링
-  if (ts - lastVideoDetectTime < MIN_FRAME_INTERVAL) {
+  if (now - lastVideoDetectTime < MIN_FRAME_INTERVAL) {
     return null; // 스킵
   }
 
-  // 단조 증가 보장 (MediaPipe는 동일하거나 감소하는 timestamp 거부)
-  if (ts <= lastVideoTimestamp) {
+  // 비디오 프레임 준비 확인
+  if (videoElement.readyState < 2) {
     return null;
   }
 
-  // 비디오가 재생 중이고 프레임이 준비되었는지 확인
-  if (videoElement.readyState < 2) {
-    return null; // HAVE_CURRENT_DATA 미만이면 스킵
-  }
-
   try {
-    // 모드 전환이 진행 중이면 스킵
+    // VIDEO 모드 시도 (첫 번째 호출 또는 이전에 성공한 경우)
+    if (videoModeWorking !== false) {
+      const ts = Math.round(timestamp);
+      // 단조 증가 보장
+      const safeTs = ts > lastVideoTimestamp ? ts : lastVideoTimestamp + 1;
+
+      if (modeSwitching) return null;
+      await setMode("VIDEO");
+
+      if (currentMode === "VIDEO") {
+        const result = poseLandmarker.detectForVideo(videoElement, safeTs);
+        lastVideoDetectTime = now;
+        lastVideoTimestamp = safeTs;
+
+        if (result.landmarks && result.landmarks.length > 0) {
+          videoModeWorking = true;
+          return { landmarks: result.landmarks[0], isFallback: false };
+        }
+      }
+    }
+
+    // VIDEO 모드 실패 또는 결과 없음 → IMAGE 모드로 감지 (더 안정적)
     if (modeSwitching) return null;
+    await setMode("IMAGE");
 
-    await setMode("VIDEO");
-    if (currentMode !== "VIDEO") return null;
+    if (currentMode === "IMAGE") {
+      // 비디오 프레임을 캔버스에 캡처해서 IMAGE 모드로 감지
+      const offscreen = document.createElement("canvas");
+      offscreen.width = videoElement.videoWidth;
+      offscreen.height = videoElement.videoHeight;
+      offscreen.getContext("2d").drawImage(videoElement, 0, 0);
 
-    const result = poseLandmarker.detectForVideo(videoElement, ts);
-    lastVideoDetectTime = ts;
-    lastVideoTimestamp = ts;
+      const result = poseLandmarker.detect(offscreen);
+      lastVideoDetectTime = now;
 
-    if (result.landmarks && result.landmarks.length > 0) {
-      return { landmarks: result.landmarks[0], isFallback: false };
+      if (result.landmarks && result.landmarks.length > 0) {
+        if (videoModeWorking === null) {
+          videoModeWorking = false;
+          console.log("[PoseDetector] VIDEO 모드 실패 → IMAGE 모드로 전환");
+        }
+        return { landmarks: result.landmarks[0], isFallback: false };
+      }
     }
   } catch (err) {
-    console.warn("[PoseDetector] VIDEO 감지 실패:", err);
+    console.warn("[PoseDetector] 영상 프레임 감지 실패:", err);
+    lastVideoDetectTime = now;
   }
 
-  lastVideoDetectTime = ts;
-  lastVideoTimestamp = ts;
+  lastVideoDetectTime = now;
   return { landmarks: generateFallbackLandmarks(), isFallback: true };
 }
 
@@ -167,6 +201,7 @@ export async function detectVideoFrame(videoElement, timestamp) {
 export function resetVideoTimestamp() {
   lastVideoDetectTime = 0;
   lastVideoTimestamp = -1;
+  videoModeWorking = null;
 }
 
 // ── Canvas에서 감지 (compositeExport용) ────────────────────
