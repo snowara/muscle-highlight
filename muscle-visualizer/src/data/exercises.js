@@ -1344,3 +1344,22 @@ export const EXERCISE_DB = {
     ],
   },
 };
+
+// ── localStorage 커스텀 데이터 자동 로드 ──
+// 관리자가 수정/추가/삭제한 운동을 기본 DB 위에 오버라이드
+(function loadCustomizations() {
+  try {
+    const customs = JSON.parse(localStorage.getItem("muscle-highlight-custom-exercises") || "{}");
+    const deleted = JSON.parse(localStorage.getItem("muscle-highlight-deleted-exercises") || "[]");
+    for (const [key, data] of Object.entries(customs)) {
+      if (EXERCISE_DB[key]) {
+        Object.assign(EXERCISE_DB[key], data);
+      } else {
+        EXERCISE_DB[key] = data;
+      }
+    }
+    for (const key of deleted) {
+      delete EXERCISE_DB[key];
+    }
+  } catch (e) { /* localStorage 불가 환경 무시 */ }
+})();

@@ -149,3 +149,61 @@ export function getLearningStats() {
 export function clearLearningData() {
   localStorage.removeItem(STORAGE_KEY);
 }
+
+/**
+ * 최근 학습 이력 반환 (최신순)
+ */
+export function getLearningHistory(limit = 50) {
+  const entries = loadEntries();
+  return entries.slice(-limit).reverse().map(e => ({
+    correct: e.correct,
+    aiGuess: e.aiGuess,
+    timestamp: e.timestamp,
+    features: e.features,
+  }));
+}
+
+/**
+ * 상세 통계: 운동별 AI 정확도, 총 수정 횟수, 가장 많이 수정된 운동
+ */
+export function getDetailedStats() {
+  const entries = loadEntries();
+  const stats = {};
+
+  for (const e of entries) {
+    if (!stats[e.correct]) {
+      stats[e.correct] = { corrections: 0, fromExercises: {} };
+    }
+    stats[e.correct].corrections++;
+    const from = e.aiGuess || "unknown";
+    stats[e.correct].fromExercises[from] = (stats[e.correct].fromExercises[from] || 0) + 1;
+  }
+
+  // 가장 많이 수정된 운동 순으로 정렬
+  const sorted = Object.entries(stats)
+    .sort((a, b) => b[1].corrections - a[1].corrections)
+    .map(([key, data]) => ({ exerciseKey: key, ...data }));
+
+  return {
+    totalCorrections: entries.length,
+    byExercise: sorted,
+    oldestEntry: entries.length > 0 ? entries[0].timestamp : null,
+    newestEntry: entries.length > 0 ? entries[entries.length - 1].timestamp : null,
+  };
+}
+
+/**
+ * 학습 데이터 raw export (JSON)
+ */
+export function exportLearningData() {
+  return loadEntries();
+}
+
+/**
+ * 학습 데이터 import
+ */
+export function importLearningData(data) {
+  if (Array.isArray(data)) {
+    saveEntries(data);
+  }
+}

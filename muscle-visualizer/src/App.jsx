@@ -10,6 +10,7 @@ import AnatomicalDiagram from "./components/AnatomicalDiagram";
 import ControlPanel from "./components/ControlPanel";
 import BrandSettings from "./components/BrandSettings";
 import Toast from "./components/Toast";
+import AdminPanel from "./components/AdminPanel";
 import { initPoseDetector, prepareImage, detectPose } from "./lib/poseDetector";
 import { classifyExercise } from "./lib/exerciseClassifier";
 import { analyzePose } from "./lib/poseAnalyzer";
@@ -45,6 +46,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [toast, setToast] = useState("");
   const [mobileTab, setMobileTab] = useState(0);
+  const [showAdmin, setShowAdmin] = useState(false);
   const [brand, setBrand] = useState({
     gymName: "MY GYM",
     tagline: "Transform Your Body",
@@ -213,7 +215,21 @@ export default function App() {
               {mediapipeStatus === "fallback" && "데모 모드 (Fallback)"}
             </span>
           </div>
+
+          {/* 관리자 설정 버튼 */}
+          <button
+            onClick={() => setShowAdmin(true)}
+            style={{
+              marginTop: 16, padding: "8px 16px", borderRadius: 8,
+              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.35)", fontSize: 11, cursor: "pointer",
+            }}
+          >
+            관리자 설정
+          </button>
         </div>
+
+        {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); window.location.reload(); }} />}
       </div>
     );
   }
@@ -253,6 +269,17 @@ export default function App() {
         />
         <div style={S.divider} />
         <BrandSettings brand={brand} setBrand={setBrand} />
+        <div style={S.divider} />
+        <button
+          onClick={() => setShowAdmin(true)}
+          style={{
+            width: "100%", padding: "10px", borderRadius: 8,
+            background: "rgba(232,64,64,0.08)", border: "1px solid rgba(232,64,64,0.2)",
+            color: "#E84040", fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}
+        >
+          관리자 설정
+        </button>
       </>
     ),
   };
@@ -363,6 +390,8 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); window.location.reload(); }} />}
 
       {/* Mobile fixed bottom actions */}
       <div className="bottom-actions-mobile" style={{
