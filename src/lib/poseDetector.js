@@ -1,94 +1,202 @@
+/**
+ * T2 AI 엔지니어 — MediaPipe PoseLandmarker 래퍼
+ * 사진: IMAGE 모드, 영상: VIDEO 모드 (최대 15fps)
+ * GPU 우선 → CPU fallback
+ * 완전 실패 시 표준 인체 비율 fallback 랜드마크
+ */
+
+const VISION_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+
 let poseLandmarker = null;
+let currentMode = null;
+let isInitializing = false;
 let initPromise = null;
 
-function generateFallbackLandmarks() {
-  const lm = new Array(33).fill(null).map(() => ({ x: 0, y: 0, z: 0, visibility: 0 }));
-  lm[0]  = { x: 0.50, y: 0.12, z: 0, visibility: 1 }; // nose
-  lm[11] = { x: 0.38, y: 0.28, z: 0, visibility: 1 }; // left shoulder
-  lm[12] = { x: 0.62, y: 0.28, z: 0, visibility: 1 }; // right shoulder
-  lm[13] = { x: 0.32, y: 0.42, z: 0, visibility: 1 }; // left elbow
-  lm[14] = { x: 0.68, y: 0.42, z: 0, visibility: 1 }; // right elbow
-  lm[15] = { x: 0.28, y: 0.55, z: 0, visibility: 1 }; // left wrist
-  lm[16] = { x: 0.72, y: 0.55, z: 0, visibility: 1 }; // right wrist
-  lm[23] = { x: 0.42, y: 0.52, z: 0, visibility: 1 }; // left hip
-  lm[24] = { x: 0.58, y: 0.52, z: 0, visibility: 1 }; // right hip
-  lm[25] = { x: 0.40, y: 0.72, z: 0, visibility: 1 }; // left knee
-  lm[26] = { x: 0.60, y: 0.72, z: 0, visibility: 1 }; // right knee
-  lm[27] = { x: 0.40, y: 0.92, z: 0, visibility: 1 }; // left ankle
-  lm[28] = { x: 0.60, y: 0.92, z: 0, visibility: 1 }; // right ankle
-  return lm;
+// ── 초기화 ────────────────────────────────────────────────
+
+export async function initPoseDetector() {
+  if (poseLandmarker) return true;
+  if (isInitializing) return initPromise;
+
+  isInitializing = true;
+  initPromise = _doInit();
+
+  try {
+    await initPromise;
+    return true;
+  } catch (err) {
+    console.warn("MediaPipe 초기화 실패:", err);
+    return false;
+  } finally {
+    isInitializing = false;
+  }
 }
 
-export async function initPoseDetector(onStatusChange) {
-  if (initPromise) return initPromise;
+async function _doInit() {
+  const { PoseLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
 
-  initPromise = (async () => {
-    try {
-      onStatusChange?.("loading");
-      const { PoseLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
+  const vision = await FilesetResolver.forVisionTasks(VISION_CDN);
 
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
-      );
+  // GPU 시도
+  try {
+    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: MODEL_URL,
+        delegate: "GPU",
+      },
+      runningMode: "IMAGE",
+      numPoses: 1,
+    });
+    currentMode = "IMAGE";
+    console.log("[PoseDetector] GPU 모드 초기화 성공");
+    return;
+  } catch (gpuErr) {
+    console.warn("[PoseDetector] GPU 실패, CPU fallback:", gpuErr);
+  }
 
-      poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-          delegate: "GPU",
-        },
-        runningMode: "IMAGE",
-        numPoses: 1,
-      });
-
-      onStatusChange?.("ready");
-      return true;
-    } catch (e) {
-      console.warn("MediaPipe GPU failed, trying CPU...", e);
-      try {
-        const { PoseLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
-        );
-        poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-            delegate: "CPU",
-          },
-          runningMode: "IMAGE",
-          numPoses: 1,
-        });
-        onStatusChange?.("ready");
-        return true;
-      } catch (e2) {
-        console.warn("MediaPipe init failed entirely, using fallback", e2);
-        onStatusChange?.("fallback");
-        return false;
-      }
-    }
-  })();
-
-  return initPromise;
+  // CPU fallback
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: MODEL_URL,
+      delegate: "CPU",
+    },
+    runningMode: "IMAGE",
+    numPoses: 1,
+  });
+  currentMode = "IMAGE";
+  console.log("[PoseDetector] CPU 모드 초기화 성공");
 }
 
-export async function detectPose(imageElement) {
+// ── 모드 전환 ─────────────────────────────────────────────
+
+async function setMode(mode) {
+  if (!poseLandmarker || currentMode === mode) return;
+  await poseLandmarker.setOptions({ runningMode: mode });
+  currentMode = mode;
+}
+
+// ── 사진 감지 (IMAGE 모드) ─────────────────────────────────
+
+export async function detectImage(imageElement) {
   if (!poseLandmarker) {
     return { landmarks: generateFallbackLandmarks(), isFallback: true };
   }
 
   try {
+    await setMode("IMAGE");
     const result = poseLandmarker.detect(imageElement);
+
     if (result.landmarks && result.landmarks.length > 0) {
       return { landmarks: result.landmarks[0], isFallback: false };
     }
-    return { landmarks: generateFallbackLandmarks(), isFallback: true };
-  } catch (e) {
-    console.warn("Pose detection failed, using fallback", e);
-    return { landmarks: generateFallbackLandmarks(), isFallback: true };
+  } catch (err) {
+    console.warn("[PoseDetector] IMAGE 감지 실패:", err);
   }
+
+  return { landmarks: generateFallbackLandmarks(), isFallback: true };
 }
 
-export function getFallbackLandmarks() {
-  return generateFallbackLandmarks();
+// ── 영상 프레임 감지 (VIDEO 모드, 15fps 제한) ──────────────
+
+let lastVideoDetectTime = 0;
+const MIN_FRAME_INTERVAL = 1000 / 15; // ~66ms
+
+export async function detectVideoFrame(videoElement, timestamp) {
+  if (!poseLandmarker) {
+    return { landmarks: generateFallbackLandmarks(), isFallback: true };
+  }
+
+  // 15fps 스로틀링
+  if (timestamp - lastVideoDetectTime < MIN_FRAME_INTERVAL) {
+    return null; // 스킵
+  }
+
+  try {
+    await setMode("VIDEO");
+    const result = poseLandmarker.detectForVideo(videoElement, timestamp);
+    lastVideoDetectTime = timestamp;
+
+    if (result.landmarks && result.landmarks.length > 0) {
+      return { landmarks: result.landmarks[0], isFallback: false };
+    }
+  } catch (err) {
+    console.warn("[PoseDetector] VIDEO 감지 실패:", err);
+  }
+
+  lastVideoDetectTime = timestamp;
+  return { landmarks: generateFallbackLandmarks(), isFallback: true };
+}
+
+// ── Canvas에서 감지 (compositeExport용) ────────────────────
+
+export async function detectCanvas(canvasElement) {
+  if (!poseLandmarker) {
+    return { landmarks: generateFallbackLandmarks(), isFallback: true };
+  }
+
+  try {
+    await setMode("IMAGE");
+    const result = poseLandmarker.detect(canvasElement);
+
+    if (result.landmarks && result.landmarks.length > 0) {
+      return { landmarks: result.landmarks[0], isFallback: false };
+    }
+  } catch (err) {
+    console.warn("[PoseDetector] Canvas 감지 실패:", err);
+  }
+
+  return { landmarks: generateFallbackLandmarks(), isFallback: true };
+}
+
+// ── Fallback 랜드마크 (표준 인체 비율) ─────────────────────
+
+export function generateFallbackLandmarks() {
+  // 표준 인체 비율 (캔버스 0~1 정규화 좌표)
+  // 직립 자세 기준
+  return [
+    { x: 0.50, y: 0.12, z: 0 },    // 0  nose
+    { x: 0.48, y: 0.10, z: 0 },    // 1  left_eye_inner
+    { x: 0.47, y: 0.10, z: 0 },    // 2  left_eye
+    { x: 0.46, y: 0.10, z: 0 },    // 3  left_eye_outer
+    { x: 0.52, y: 0.10, z: 0 },    // 4  right_eye_inner
+    { x: 0.53, y: 0.10, z: 0 },    // 5  right_eye
+    { x: 0.54, y: 0.10, z: 0 },    // 6  right_eye_outer
+    { x: 0.44, y: 0.11, z: 0 },    // 7  left_ear
+    { x: 0.56, y: 0.11, z: 0 },    // 8  right_ear
+    { x: 0.48, y: 0.13, z: 0 },    // 9  mouth_left
+    { x: 0.52, y: 0.13, z: 0 },    // 10 mouth_right
+    { x: 0.38, y: 0.22, z: 0 },    // 11 left_shoulder
+    { x: 0.62, y: 0.22, z: 0 },    // 12 right_shoulder
+    { x: 0.32, y: 0.35, z: 0 },    // 13 left_elbow
+    { x: 0.68, y: 0.35, z: 0 },    // 14 right_elbow
+    { x: 0.30, y: 0.48, z: 0 },    // 15 left_wrist
+    { x: 0.70, y: 0.48, z: 0 },    // 16 right_wrist
+    { x: 0.28, y: 0.50, z: 0 },    // 17 left_pinky
+    { x: 0.72, y: 0.50, z: 0 },    // 18 right_pinky
+    { x: 0.29, y: 0.49, z: 0 },    // 19 left_index
+    { x: 0.71, y: 0.49, z: 0 },    // 20 right_index
+    { x: 0.31, y: 0.48, z: 0 },    // 21 left_thumb
+    { x: 0.69, y: 0.48, z: 0 },    // 22 right_thumb
+    { x: 0.42, y: 0.48, z: 0 },    // 23 left_hip
+    { x: 0.58, y: 0.48, z: 0 },    // 24 right_hip
+    { x: 0.42, y: 0.65, z: 0 },    // 25 left_knee
+    { x: 0.58, y: 0.65, z: 0 },    // 26 right_knee
+    { x: 0.42, y: 0.82, z: 0 },    // 27 left_ankle
+    { x: 0.58, y: 0.82, z: 0 },    // 28 right_ankle
+    { x: 0.41, y: 0.85, z: 0 },    // 29 left_heel
+    { x: 0.59, y: 0.85, z: 0 },    // 30 right_heel
+    { x: 0.43, y: 0.86, z: 0 },    // 31 left_foot_index
+    { x: 0.57, y: 0.86, z: 0 },    // 32 right_foot_index
+  ];
+}
+
+// ── 상태 조회 ─────────────────────────────────────────────
+
+export function isDetectorReady() {
+  return poseLandmarker !== null;
+}
+
+export function getCurrentMode() {
+  return currentMode;
 }

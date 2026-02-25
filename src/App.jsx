@@ -1,304 +1,260 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import UploadArea from "./components/UploadArea";
 import CanvasView from "./components/CanvasView";
+import VideoPlayer from "./components/VideoPlayer";
 import ExerciseGrid from "./components/ExerciseGrid";
 import ControlPanel from "./components/ControlPanel";
+import PoseScoreCard from "./components/PoseScoreCard";
+import CorrectionPanel from "./components/CorrectionPanel";
 import MuscleInfo from "./components/MuscleInfo";
-import AnatomyPanel from "./components/AnatomyPanel";
 import BrandSettings from "./components/BrandSettings";
-import VideoUploadArea from "./components/VideoUploadArea";
-import VideoProcessor from "./components/VideoProcessor";
-import { initPoseDetector, detectPose } from "./lib/poseDetector";
-import { createCompositeCanvas, downloadImage, copyToClipboard, loadBrandSettings, saveBrandSettings } from "./lib/compositeExport";
-import { EXERCISE_DB } from "./data/exercises";
-import { classifyExercise } from "./lib/exerciseClassifier";
-import { recordCorrection } from "./lib/learningStore";
+import { initPoseDetector, detectImage, isDetectorReady } from "./lib/poseDetector";
 import { analyzePose } from "./lib/poseAnalyzer";
+import { EXERCISE_DB } from "./data/exercises";
+import {
+  createCompositeCanvas,
+  downloadImage,
+  copyToClipboard,
+  loadBrandSettings,
+  saveBrandSettings,
+} from "./lib/compositeExport";
 
 export default function App() {
-  const [appState, setAppState] = useState("upload");
-  const [mode, setMode] = useState("photo");
-  const [image, setImage] = useState(null);
-  const [canvasSize, setCanvasSize] = useState({ w: 600, h: 800 });
+  // ── State ──
+  const [mode, setMode] = useState("upload"); // upload | edit
+  const [mediaType, setMediaType] = useState(null); // image | video
+  const [mediaUrl, setMediaUrl] = useState(null);
+  const [mediaFile, setMediaFile] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [detectorStatus, setDetectorStatus] = useState("loading");
+
+  const [selectedExercise, setSelectedExercise] = useState(null);
   const [landmarks, setLandmarks] = useState(null);
-  const [selectedExercise, setSelectedExercise] = useState("squat");
-  const [autoDetected, setAutoDetected] = useState(null);
+  const [poseResult, setPoseResult] = useState(null);
+  const [worstFrame, setWorstFrame] = useState(null);
+
   const [glowIntensity, setGlowIntensity] = useState(0.7);
   const [showSkeleton, setShowSkeleton] = useState(false);
-  const [showLabels, setShowLabels] = useState(true);
-  const [mediapipeStatus, setMediapipeStatus] = useState("loading");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [copyMsg, setCopyMsg] = useState("");
-  const [poseQuality, setPoseQuality] = useState(null);
-  const [videoFile, setVideoFile] = useState(null);
-  const [brand, setBrand] = useState(() => loadBrandSettings());
+  const [brand, setBrand] = useState(loadBrandSettings);
+  const [toast, setToast] = useState(null);
 
   const canvasRef = useRef(null);
+  const imageRef = useRef(null);
 
+  // ── MediaPipe 초기화 ──
   useEffect(() => {
-    initPoseDetector(setMediapipeStatus);
+    initPoseDetector().then((ok) => {
+      setDetectorStatus(ok ? "ready" : "fallback");
+    });
   }, []);
 
+  // ── 브랜드 설정 저장 ──
   useEffect(() => {
     saveBrandSettings(brand);
   }, [brand]);
 
-  async function handleImageLoad(img, w, h) {
-    setIsAnalyzing(true);
-    setImage(img);
-    setCanvasSize({ w, h });
+  // ── 파일 업로드 처리 ──
+  const handleFileSelected = useCallback(async (file, type) => {
+    setIsLoading(true);
+    setMediaFile(file);
+    setMediaType(type);
+    setSelectedExercise(null);
+    setPoseResult(null);
+    setLandmarks(null);
+    setWorstFrame(null);
 
-    const tmpCanvas = document.createElement("canvas");
-    tmpCanvas.width = w;
-    tmpCanvas.height = h;
-    const tmpCtx = tmpCanvas.getContext("2d");
-    tmpCtx.drawImage(img, 0, 0, w, h);
+    const url = URL.createObjectURL(file);
+    setMediaUrl(url);
 
-    const result = await detectPose(tmpCanvas);
-    setLandmarks(result.landmarks);
-    if (result.isFallback && mediapipeStatus !== "fallback") {
-      setMediapipeStatus("fallback");
+    if (type === "image") {
+      const img = new Image();
+      img.onload = async () => {
+        // 대형 이미지 리사이즈 (최대 2400px)
+        const MAX = 2400;
+        let src = img;
+        if (img.naturalWidth > MAX || img.naturalHeight > MAX) {
+          const scale = Math.min(MAX / img.naturalWidth, MAX / img.naturalHeight);
+          const c = document.createElement("canvas");
+          c.width = Math.round(img.naturalWidth * scale);
+          c.height = Math.round(img.naturalHeight * scale);
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          const resized = new Image();
+          resized.src = c.toDataURL("image/jpeg", 0.92);
+          await new Promise((r) => { resized.onload = r; });
+          src = resized;
+        }
+        imageRef.current = src;
+        const result = await detectImage(src);
+        setLandmarks(result.landmarks);
+        setIsLoading(false);
+        setMode("edit");
+        if (result.isFallback) {
+          showToast("AI 감지 실패 — 데모 모드로 전환됩니다", "warn");
+        }
+      };
+      img.onerror = () => {
+        setIsLoading(false);
+        showToast("이미지 로드 실패 — 다른 파일을 시도하세요", "error");
+      };
+      img.src = url;
+    } else {
+      // 영상: 바로 편집 모드 진입
+      setIsLoading(false);
+      setMode("edit");
     }
+  }, []);
 
-    if (!result.isFallback) {
-      const detected = classifyExercise(result.landmarks);
-      setAutoDetected(detected);
-      setSelectedExercise(detected.key);
-      const quality = analyzePose(result.landmarks, detected.key);
-      setPoseQuality(quality);
+  // ── 운동 선택 → 자세 분석 ──
+  useEffect(() => {
+    if (!selectedExercise || !landmarks) {
+      setPoseResult(null);
+      return;
     }
+    const exercise = EXERCISE_DB[selectedExercise];
+    if (!exercise) return;
 
-    setIsAnalyzing(false);
-    setAppState("edit");
-  }
+    const result = analyzePose(landmarks, selectedExercise, exercise);
+    setPoseResult(result);
+  }, [selectedExercise, landmarks]);
 
-  function handleVideoSelect(file) {
-    setVideoFile(file);
-    setAppState("video");
-  }
+  // ── 영상 모드 포즈 업데이트 ──
+  const handleVideoPoseUpdate = useCallback((newLandmarks, newResult) => {
+    setLandmarks(newLandmarks);
+    setPoseResult(newResult);
+  }, []);
 
+  const handleWorstFrame = useCallback((frame) => {
+    setWorstFrame(frame);
+  }, []);
+
+  // ── 내보내기 ──
   function handleDownload() {
-    if (!canvasRef.current || !image || !landmarks) return;
-    const { canvas, poseResult } = createCompositeCanvas(
-      canvasRef.current, image, landmarks, selectedExercise,
-      { glowIntensity, showSkeleton, showLabels },
+    if (!canvasRef.current || !selectedExercise) return;
+
+    const exercise = EXERCISE_DB[selectedExercise];
+    const { canvas, poseResult: pr } = createCompositeCanvas(
+      canvasRef.current,
+      imageRef.current,
+      landmarks,
+      selectedExercise,
+      { glowIntensity, showSkeleton, showLabels: true, muscleStates: poseResult?.muscleStates, poseStatus: poseResult?.status },
       brand
     );
-    downloadImage(canvas, brand.gymName, EXERCISE_DB[selectedExercise].name, poseResult?.score);
+    downloadImage(canvas, brand.gymName, exercise?.name || "운동", pr.score);
+    showToast("PNG 다운로드 완료", "success");
   }
 
   async function handleCopy() {
-    if (!canvasRef.current || !image || !landmarks) return;
-    const { canvas, poseResult } = createCompositeCanvas(
-      canvasRef.current, image, landmarks, selectedExercise,
-      { glowIntensity, showSkeleton, showLabels },
+    if (!canvasRef.current || !selectedExercise) return;
+
+    const { canvas } = createCompositeCanvas(
+      canvasRef.current,
+      imageRef.current,
+      landmarks,
+      selectedExercise,
+      { glowIntensity, showSkeleton, showLabels: true, muscleStates: poseResult?.muscleStates, poseStatus: poseResult?.status },
       brand
     );
     const ok = await copyToClipboard(canvas);
-    if (ok) {
-      setCopyMsg("복사 완료!");
-    } else {
-      downloadImage(canvas, brand.gymName, EXERCISE_DB[selectedExercise].name, poseResult?.score);
-      setCopyMsg("클립보드 불가 — 다운로드됨");
-    }
-    setTimeout(() => setCopyMsg(""), 2000);
-  }
-
-  function handleExerciseSelect(key) {
-    if (autoDetected && key !== autoDetected.key && landmarks) {
-      recordCorrection(landmarks, key, autoDetected.key);
-    }
-    setSelectedExercise(key);
-    if (landmarks) {
-      const quality = analyzePose(landmarks, key);
-      setPoseQuality(quality);
-    }
+    showToast(ok ? "클립보드 복사 완료" : "복사 실패 — 다운로드를 이용하세요", ok ? "success" : "error");
   }
 
   function handleReset() {
-    setAppState("upload");
-    setImage(null);
+    if (mediaUrl) URL.revokeObjectURL(mediaUrl);
+    setMode("upload");
+    setMediaType(null);
+    setMediaUrl(null);
+    setMediaFile(null);
+    setSelectedExercise(null);
     setLandmarks(null);
-    setPoseQuality(null);
-    setVideoFile(null);
+    setPoseResult(null);
+    setWorstFrame(null);
   }
 
-  if (appState === "upload") {
-    return (
-      <div style={styles.container}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: 20 }}>
-          {/* Hero Section */}
-          <h1
-            className="gradient-text"
-            style={{ fontSize: 40, fontWeight: 900, marginBottom: 6, letterSpacing: "-0.02em" }}
-          >
-            Muscle Highlight
-          </h1>
-          <p style={{
-            color: "rgba(255,255,255,0.5)", fontSize: 13, marginBottom: 16,
-            fontWeight: 300, letterSpacing: "0.15em", textTransform: "uppercase",
-          }}>
-            AI-Powered Muscle Analysis
-          </p>
-
-          {/* Feature Pills */}
-          <div className="feature-pills">
-            <span className="feature-pill">🎯 AI 포즈 분석</span>
-            <span className="feature-pill">🔴🔵 자세 교정</span>
-            <span className="feature-pill">📸 SNS 공유</span>
-          </div>
-
-          {/* Mode Tabs */}
-          <div style={{
-            display: "flex", gap: 4, marginBottom: 32,
-            background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 4,
-          }}>
-            {[
-              { key: "photo", label: "📸 사진" },
-              { key: "video", label: "🎬 영상" },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setMode(tab.key)}
-                style={{
-                  padding: "10px 28px", borderRadius: 10, border: "none", cursor: "pointer",
-                  background: mode === tab.key ? brand.brandColor + "22" : "transparent",
-                  color: mode === tab.key ? brand.brandColor : "rgba(255,255,255,0.5)",
-                  fontSize: 14, fontWeight: mode === tab.key ? 700 : 500,
-                  outline: mode === tab.key ? `1.5px solid ${brand.brandColor}40` : "none",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Upload / Analyzing */}
-          {isAnalyzing ? (
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
-              padding: 60, borderRadius: 16,
-              background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)",
-            }}>
-              <div className="upload-pulse-wrapper">
-                <div className="upload-pulse-ring" />
-                <div style={{
-                  width: 40, height: 40, border: `3px solid ${brand.brandColor}`, borderTopColor: "transparent",
-                  borderRadius: "50%", animation: "spin 1s linear infinite",
-                }} />
-              </div>
-              <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 14 }}>AI 포즈 분석 중...</p>
-            </div>
-          ) : mode === "photo" ? (
-            <UploadArea onImageLoad={handleImageLoad} brandColor={brand.brandColor} uploadLabel="운동 사진을 올려주세요" />
-          ) : (
-            <VideoUploadArea onVideoSelect={handleVideoSelect} brandColor={brand.brandColor} />
-          )}
-
-          {/* Status Indicator */}
-          <div style={{ marginTop: 24, display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{
-              width: 6, height: 6, borderRadius: "50%",
-              background: mediapipeStatus === "ready" ? "#00E676" :
-                mediapipeStatus === "loading" ? "#FFD54F" : "#FF6B35",
-            }} />
-            <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>
-              {mediapipeStatus === "ready" && "MediaPipe AI 준비 완료"}
-              {mediapipeStatus === "loading" && "AI 모델 로딩 중..."}
-              {mediapipeStatus === "fallback" && "데모 모드 (Fallback)"}
-            </span>
-          </div>
-
-          {/* Footer Credits */}
-          <p className="powered-by">Powered by MediaPipe AI</p>
-        </div>
-      </div>
-    );
+  function showToast(msg, type = "info") {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
   }
 
-  if (appState === "video" && videoFile) {
-    return (
-      <div style={styles.container}>
-        <VideoProcessor videoFile={videoFile} brand={brand} setBrand={setBrand} onReset={handleReset} />
-      </div>
-    );
-  }
-
+  // ── Render ──
   return (
-    <div style={styles.container}>
-      <div className="edit-layout" style={styles.editLayout}>
-        <div style={styles.canvasCol}>
-          <CanvasView
-            image={image} landmarks={landmarks} exerciseKey={selectedExercise}
-            canvasSize={canvasSize} glowIntensity={glowIntensity}
-            showSkeleton={showSkeleton} showLabels={showLabels}
-            canvasRef={canvasRef} poseQuality={poseQuality}
-          />
-          <div style={styles.actionBar}>
-            <button onClick={handleDownload} style={{ ...styles.btn, background: brand.brandColor }}>다운로드</button>
-            <button onClick={handleCopy} style={{ ...styles.btn, background: "rgba(255,255,255,0.08)", border: `1px solid ${brand.brandColor}`, color: brand.brandColor }}>
-              {copyMsg || "클립보드 복사"}
-            </button>
-            <button onClick={handleReset} style={{ ...styles.btn, background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}>새 사진</button>
-            {poseQuality && poseQuality.score != null && (
-              <span className="pose-score-badge" style={{
-                color: poseQuality.score >= 70 ? "#4FC3F7" : "#FF8A65",
-              }}>
-                <span className="pose-score-dot" style={{
-                  background: poseQuality.score >= 70 ? "#2196F3" : "#F44336",
-                  boxShadow: poseQuality.score >= 70
-                    ? "0 0 6px rgba(33,150,243,0.5)"
-                    : "0 0 6px rgba(244,67,54,0.5)",
-                }} />
-                자세 점수 {Math.round(poseQuality.score)}/100
-              </span>
+    <div className="app">
+      <header className="app-header">
+        <h1 className="app-title">
+          <span className="title-icon">💪</span> Muscle Highlight
+        </h1>
+        <p className="app-subtitle">AI 자세 분석 · 근육 시각화</p>
+        <span className={`detector-badge ${detectorStatus}`}>
+          {detectorStatus === "ready" ? "AI Ready" : detectorStatus === "loading" ? "Loading..." : "Demo Mode"}
+        </span>
+      </header>
+
+      {mode === "upload" ? (
+        <main className="main-upload">
+          <UploadArea onFileSelected={handleFileSelected} isLoading={isLoading} />
+        </main>
+      ) : (
+        <main className="main-edit">
+          <div className="edit-left">
+            {mediaType === "image" ? (
+              <CanvasView
+                imageUrl={mediaUrl}
+                landmarks={landmarks}
+                exerciseKey={selectedExercise}
+                poseResult={poseResult}
+                glowIntensity={glowIntensity}
+                showSkeleton={showSkeleton}
+                canvasRef={canvasRef}
+              />
+            ) : (
+              <VideoPlayer
+                videoUrl={mediaUrl}
+                exerciseKey={selectedExercise}
+                glowIntensity={glowIntensity}
+                showSkeleton={showSkeleton}
+                onPoseUpdate={handleVideoPoseUpdate}
+                onWorstFrame={handleWorstFrame}
+              />
             )}
+
+            <div className="action-buttons">
+              {mediaType === "image" && (
+                <>
+                  <button className="btn btn-primary" onClick={handleDownload} disabled={!selectedExercise}>
+                    📥 다운로드
+                  </button>
+                  <button className="btn btn-secondary" onClick={handleCopy} disabled={!selectedExercise}>
+                    📋 복사
+                  </button>
+                </>
+              )}
+              <button className="btn btn-ghost" onClick={handleReset}>
+                🔄 새 파일
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div className="anatomy-panel" style={styles.anatomyPanel}>
-          <AnatomyPanel exerciseKey={selectedExercise} brandColor={brand.brandColor} poseQuality={poseQuality} />
-        </div>
+          <div className="edit-right">
+            <ExerciseGrid selectedExercise={selectedExercise} onSelect={setSelectedExercise} />
+            <PoseScoreCard poseResult={poseResult} />
+            <CorrectionPanel exerciseKey={selectedExercise} poseResult={poseResult} />
+            <ControlPanel
+              glowIntensity={glowIntensity}
+              showSkeleton={showSkeleton}
+              onGlowChange={setGlowIntensity}
+              onSkeletonToggle={setShowSkeleton}
+            />
+            <MuscleInfo exerciseKey={selectedExercise} poseResult={poseResult} />
+            <BrandSettings settings={brand} onChange={setBrand} />
+          </div>
+        </main>
+      )}
 
-        <div className="side-panel" style={styles.panel}>
-          <ExerciseGrid selected={selectedExercise} onSelect={handleExerciseSelect} brandColor={brand.brandColor} />
-          <div style={styles.divider} />
-          <MuscleInfo exerciseKey={selectedExercise} mediapipeStatus={mediapipeStatus} autoDetected={autoDetected} onSelectExercise={handleExerciseSelect} poseQuality={poseQuality} />
-          <div style={styles.divider} />
-          <ControlPanel glowIntensity={glowIntensity} setGlowIntensity={setGlowIntensity} showSkeleton={showSkeleton} setShowSkeleton={setShowSkeleton} showLabels={showLabels} setShowLabels={setShowLabels} brandColor={brand.brandColor} />
-          <div style={styles.divider} />
-          <BrandSettings brand={brand} setBrand={setBrand} />
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.msg}
         </div>
-      </div>
+      )}
     </div>
   );
 }
-
-const styles = {
-  container: {
-    minHeight: "100vh",
-    background: "linear-gradient(160deg, #07070f, #0d0d22, #090916)",
-    fontFamily: "'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif",
-    color: "#fff",
-  },
-  editLayout: { display: "flex", gap: 24, padding: 24, maxWidth: 1200, margin: "0 auto" },
-  canvasCol: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 },
-  anatomyPanel: {
-    width: 280, flexShrink: 0, display: "flex", flexDirection: "column",
-    padding: 16, background: "rgba(255,255,255,0.025)",
-    border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, alignSelf: "flex-start",
-  },
-  panel: {
-    width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 20,
-    padding: 20, background: "rgba(255,255,255,0.025)",
-    border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14,
-    alignSelf: "flex-start", maxHeight: "calc(100vh - 48px)", overflowY: "auto",
-  },
-  actionBar: { display: "flex", gap: 10, flexWrap: "wrap" },
-  btn: {
-    padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer",
-    color: "#fff", fontSize: 13, fontWeight: 600, transition: "opacity 0.15s ease", whiteSpace: "nowrap",
-  },
-  divider: { height: 1, background: "rgba(255,255,255,0.06)" },
-};

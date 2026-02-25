@@ -665,7 +665,9 @@ function drawBrandBar(ctx, w, y, exerciseKey, brand, poseResult) {
   const rightX = w - pad;
 
   // 주동근 목록
-  const primaryLabels = Object.keys(ex.primary)
+  const pKeys = typeof ex.primary === "object" && !Array.isArray(ex.primary)
+    ? Object.keys(ex.primary) : (ex.primary || []);
+  const primaryLabels = pKeys
     .map((k) => MUSCLE_REGIONS[k]?.label)
     .filter(Boolean)
     .join(" · ");

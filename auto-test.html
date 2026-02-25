@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Auto Capture — Dual Color Glow Test</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a1a; color: #fff; font-family: -apple-system, sans-serif; padding: 20px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
+  .card { text-align: center; }
+  .card h3 { font-size: 13px; margin-bottom: 8px; color: rgba(255,255,255,0.7); }
+  canvas { border-radius: 12px; display: block; }
+  h1 { text-align: center; font-size: 18px; margin-bottom: 16px; }
+  #status { text-align: center; font-size: 12px; color: #00E5FF; margin-top: 12px; }
+</style>
+</head>
+<body>
+<h1>Dual-Color Muscle Glow — 3 Mode Comparison</h1>
+<div class="row" id="row1"></div>
+<div class="row" id="row2"></div>
+<div id="status">렌더링 중...</div>
+
+<script>
+// ── Inline data ──
+const MUSCLE_REGIONS = {
+  chest:{label:"대흉근",color:"#FF3B5C"},shoulders:{label:"삼각근",color:"#FF6B35"},
+  biceps:{label:"상완이두근",color:"#FF8C42"},triceps:{label:"상완삼두근",color:"#FFA726"},
+  forearms:{label:"전완근",color:"#FFD54F"},lats:{label:"광배근",color:"#7C4DFF"},
+  traps:{label:"승모근",color:"#E040FB"},core:{label:"복근/코어",color:"#00E5FF"},
+  lowerBack:{label:"척추기립근",color:"#1DE9B6"},glutes:{label:"둔근",color:"#69F0AE"},
+  quadriceps:{label:"대퇴사두근",color:"#00E676"},hamstrings:{label:"햄스트링",color:"#76FF03"},
+  calves:{label:"비복근",color:"#C6FF00"},
+};
+const EXERCISE_DB = {
+  squat:{name:"스쿼트",icon:"🏋️",primary:["quadriceps","glutes"],secondary:["hamstrings","calves","core"]},
+  benchPress:{name:"벤치프레스",icon:"🔥",primary:["chest","triceps"],secondary:["shoulders","core"]},
+  deadlift:{name:"데드리프트",icon:"🏋️",primary:["hamstrings","glutes","lowerBack"],secondary:["quadriceps","core","traps","forearms"]},
+};
+const MUSCLE_SHAPES={chest:{angle:0,aspect:1.8,scale:1.3},shoulders:{angle:0,aspect:1.2,scale:1.0},biceps:{angle:Math.PI*0.15,aspect:0.6,scale:0.9},triceps:{angle:Math.PI*0.15,aspect:0.6,scale:0.85},forearms:{angle:Math.PI*0.1,aspect:0.5,scale:0.8},lats:{angle:0,aspect:0.7,scale:1.1},traps:{angle:0,aspect:1.6,scale:0.85},core:{angle:0,aspect:0.7,scale:1.2},lowerBack:{angle:0,aspect:1.2,scale:1.0},glutes:{angle:0,aspect:1.3,scale:1.1},quadriceps:{angle:0,aspect:0.6,scale:1.3},hamstrings:{angle:0,aspect:0.55,scale:1.2},calves:{angle:0,aspect:0.5,scale:1.0}};
+const MUSCLE_DUAL_COLORS={chest:{correct:"#2979FF",wrong:"#FF1744"},shoulders:{correct:"#448AFF",wrong:"#FF5252"},biceps:{correct:"#2196F3",wrong:"#FF5722"},triceps:{correct:"#42A5F5",wrong:"#FF6E40"},forearms:{correct:"#29B6F6",wrong:"#FF8A65"},lats:{correct:"#0288D1",wrong:"#E53935"},traps:{correct:"#0277BD",wrong:"#D50000"},core:{correct:"#00B0FF",wrong:"#FF1744"},lowerBack:{correct:"#0091EA",wrong:"#D32F2F"},glutes:{correct:"#039BE5",wrong:"#C62828"},quadriceps:{correct:"#0288D1",wrong:"#FF1744"},hamstrings:{correct:"#0277BD",wrong:"#E53935"},calves:{correct:"#01579B",wrong:"#B71C1C"}};
+const HIGHLIGHT={correct:"#80D8FF",wrong:"#FF8A80"};
+const RENDER_ORDER=["lowerBack","core","hamstrings","quadriceps","calves","glutes","lats","forearms","biceps","triceps","chest","shoulders","traps"];
+const JOINT_MUSCLE_MAP={11:["shoulders","chest"],12:["shoulders","chest"],13:["biceps","triceps"],14:["biceps","triceps"],15:["forearms"],16:["forearms"],23:["glutes","core","lowerBack"],24:["glutes","core","lowerBack"],25:["quadriceps","hamstrings"],26:["quadriceps","hamstrings"],27:["calves"],28:["calves"]};
+const DEFAULT_CORR={lowerBack:-Math.PI/2,core:Math.PI,quadriceps:-Math.PI/6,hamstrings:Math.PI/2,glutes:-Math.PI/2,shoulders:-Math.PI/4,chest:0,calves:-Math.PI/2,biceps:-Math.PI/3,triceps:Math.PI/3,forearms:0,lats:-Math.PI/4,traps:-Math.PI/2};
+
+function getMusclePositions(lm,cw,ch){const p=(i)=>({x:lm[i].x*cw,y:lm[i].y*ch});const mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});const lerp=(a,b,t)=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});const ls=p(11),rs=p(12),le=p(13),re=p(14),lw=p(15),rw=p(16),lh=p(23),rh=p(24),lk=p(25),rk=p(26),la=p(27),ra=p(28);const sm=mid(ls,rs),hm=mid(lh,rh),sw=Math.abs(rs.x-ls.x),nose=p(0);return{chest:[lerp(sm,hm,0.08),{x:sm.x-sw*0.15,y:lerp(sm,hm,0.14).y},{x:sm.x+sw*0.15,y:lerp(sm,hm,0.14).y}],shoulders:[{x:ls.x-sw*0.1,y:ls.y},{x:ls.x-sw*0.04,y:ls.y+sw*0.08},{x:rs.x+sw*0.1,y:rs.y},{x:rs.x+sw*0.04,y:rs.y+sw*0.08}],biceps:[lerp(ls,le,0.4),lerp(ls,le,0.6),lerp(rs,re,0.4),lerp(rs,re,0.6)],triceps:[lerp(ls,le,0.45),lerp(ls,le,0.65),lerp(rs,re,0.45),lerp(rs,re,0.65)],forearms:[lerp(le,lw,0.3),lerp(le,lw,0.6),lerp(re,rw,0.3),lerp(re,rw,0.6)],lats:[{x:ls.x+sw*0.12,y:lerp(ls,lh,0.35).y},{x:ls.x+sw*0.12,y:lerp(ls,lh,0.58).y},{x:rs.x-sw*0.12,y:lerp(rs,rh,0.35).y},{x:rs.x-sw*0.12,y:lerp(rs,rh,0.58).y}],traps:[lerp(sm,nose,0.2),lerp(sm,nose,0.4),{x:ls.x+sw*0.08,y:lerp(sm,nose,0.15).y},{x:rs.x-sw*0.08,y:lerp(sm,nose,0.15).y}],core:[lerp(sm,hm,0.42),lerp(sm,hm,0.55),lerp(sm,hm,0.68)],lowerBack:[lerp(sm,hm,0.65),lerp(sm,hm,0.82)],glutes:[{x:lh.x,y:lerp(lh,lk,0.05).y},{x:lh.x,y:lerp(lh,lk,0.14).y},{x:rh.x,y:lerp(rh,rk,0.05).y},{x:rh.x,y:lerp(rh,rk,0.14).y}],quadriceps:[lerp(lh,lk,0.25),lerp(lh,lk,0.42),lerp(lh,lk,0.58),lerp(rh,rk,0.25),lerp(rh,rk,0.42),lerp(rh,rk,0.58)],hamstrings:[{x:lerp(lh,lk,0.3).x+4,y:lerp(lh,lk,0.3).y},{x:lerp(lh,lk,0.5).x+4,y:lerp(lh,lk,0.5).y},{x:lerp(rh,rk,0.3).x-4,y:lerp(rh,rk,0.3).y},{x:lerp(rh,rk,0.5).x-4,y:lerp(rh,rk,0.5).y}],calves:[lerp(lk,la,0.3),lerp(lk,la,0.55),lerp(rk,ra,0.3),lerp(rk,ra,0.55)]};}
+function getBodyScale(lm,cw){return Math.max(Math.abs(lm[12].x*cw-lm[11].x*cw)/120,0.6);}
+function getSkeletonConnections(lm,cw,ch){const p=(i)=>({x:lm[i].x*cw,y:lm[i].y*ch});return[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]].map(([a,b])=>[p(a),p(b)]);}
+
+// ── Renderer ──
+function hexA(a){return Math.round(Math.max(0,Math.min(1,a))*255).toString(16).padStart(2,"0");}
+function parseH(h){h=h.replace("#","");return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+function lerpC(a,b,t){const ca=parseH(a),cb=parseH(b);return"#"+[0,1,2].map(i=>Math.round(ca[i]+(cb[i]-ca[i])*t).toString(16).padStart(2,"0")).join("");}
+function lerpV(a,b,t){return a+(b-a)*t;}
+
+function drawGlow(ctx,pt,mk,r,ba,shape,isW,time){
+  const col=MUSCLE_DUAL_COLORS[mk]||{correct:"#2196F3",wrong:"#FF1744"};
+  const{angle=0,aspect=1.0}=shape||{};
+  const wt=isW?1:0;
+  const mc=lerpC(col.correct,col.wrong,wt);
+  const hlc=lerpC(HIGHLIGHT.correct,HIGHLIGHT.wrong,wt);
+  const cp=Math.sin(time*2)*0.1+0.9,wp=Math.sin(time*4)*0.25+0.75;
+  const pulse=lerpV(cp,wp,wt);
+  const alpha=ba*pulse;
+  const oo=lerpV(0.15,0.20,wt);
+  ctx.save();ctx.translate(pt.x,pt.y);ctx.rotate(angle);ctx.scale(1,1/Math.max(aspect,0.3));
+  // L1
+  const oR=r*2.5;const g1=ctx.createRadialGradient(0,0,0,0,0,oR);
+  g1.addColorStop(0,mc+hexA(alpha*oo*4));g1.addColorStop(0.25,mc+hexA(alpha*oo*2.5));
+  g1.addColorStop(0.5,mc+hexA(alpha*oo*1.2));g1.addColorStop(0.75,mc+hexA(alpha*oo*0.4));g1.addColorStop(1,mc+"00");
+  ctx.globalCompositeOperation="screen";ctx.beginPath();ctx.arc(0,0,oR,0,Math.PI*2);ctx.fillStyle=g1;ctx.fill();
+  // L2
+  const cR=r*1.2;const g2=ctx.createRadialGradient(0,0,0,0,0,cR);
+  g2.addColorStop(0,mc+hexA(alpha*0.90));g2.addColorStop(0.3,mc+hexA(alpha*0.55));
+  g2.addColorStop(0.6,mc+hexA(alpha*0.20));g2.addColorStop(1,mc+"00");
+  ctx.beginPath();ctx.arc(0,0,cR,0,Math.PI*2);ctx.fillStyle=g2;ctx.fill();
+  // L3
+  const hR=r*0.35;const g3=ctx.createRadialGradient(0,0,0,0,0,hR);
+  g3.addColorStop(0,"#FFFFFF"+hexA(alpha*0.55));g3.addColorStop(0.3,hlc+hexA(alpha*0.70));
+  g3.addColorStop(0.7,mc+hexA(alpha*0.30));g3.addColorStop(1,mc+"00");
+  ctx.beginPath();ctx.arc(0,0,hR,0,Math.PI*2);ctx.fillStyle=g3;ctx.fill();
+  ctx.restore();
+}
+
+function drawWarn(ctx,pt,r,time){
+  const sz=r*0.4,cx=pt.x+r*0.85,cy=pt.y-r*0.85;
+  const ip=Math.sin(time*5)*0.08+1.0,ds=sz*ip;
+  ctx.save();ctx.shadowColor="rgba(255,23,68,0.7)";ctx.shadowBlur=ds*1.2;
+  ctx.beginPath();ctx.arc(cx,cy,ds,0,Math.PI*2);ctx.fillStyle="#FFF";ctx.fill();
+  ctx.shadowColor="transparent";ctx.shadowBlur=0;
+  ctx.strokeStyle="#FF1744";ctx.lineWidth=ds*0.15;ctx.beginPath();ctx.arc(cx,cy,ds,0,Math.PI*2);ctx.stroke();
+  ctx.font=`900 ${ds*1.4}px -apple-system,sans-serif`;ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillStyle="#FF1744";ctx.fillText("!",cx,cy+ds*0.05);ctx.restore();
+}
+
+function drawArrow(ctx,o,ang,len,time){
+  const hl=len*0.32,br=Math.sin(time*3)*0.06+1.0;
+  const tx=o.x+Math.cos(ang)*len*br,ty=o.y+Math.sin(ang)*len*br;
+  ctx.save();ctx.shadowColor="rgba(255,255,255,0.6)";ctx.shadowBlur=8;
+  ctx.strokeStyle="rgba(255,255,255,0.85)";ctx.lineWidth=2.5;ctx.lineCap="round";ctx.lineJoin="round";
+  ctx.setLineDash([6,3]);ctx.beginPath();ctx.moveTo(o.x,o.y);ctx.lineTo(tx,ty);ctx.stroke();
+  ctx.setLineDash([]);ctx.lineWidth=3;ctx.beginPath();
+  ctx.moveTo(tx-hl*Math.cos(ang-Math.PI/5),ty-hl*Math.sin(ang-Math.PI/5));
+  ctx.lineTo(tx,ty);ctx.lineTo(tx-hl*Math.cos(ang+Math.PI/5),ty-hl*Math.sin(ang+Math.PI/5));
+  ctx.stroke();ctx.shadowColor="transparent";ctx.shadowBlur=0;ctx.restore();
+}
+
+function drawLabel(ctx,pts,label,mk,isW,cw,placed){
+  if(!pts||!pts.length)return;
+  const col=MUSCLE_DUAL_COLORS[mk]||{correct:"#2196F3",wrong:"#FF1744"};
+  const sc=isW?col.wrong:col.correct;const pfx=isW?"\u2717 ":"\u2713 ";
+  const cx2=pts.reduce((s,p)=>s+p.x,0)/pts.length,cy2=pts.reduce((s,p)=>s+p.y,0)/pts.length;
+  const fs=Math.max(10,Math.min(14,cw*0.028));
+  ctx.save();ctx.font=`bold ${fs}px -apple-system,sans-serif`;ctx.textAlign="center";ctx.textBaseline="middle";
+  const text=pfx+label;const tw=ctx.measureText(text).width;const pw=tw+20,ph=fs+10;
+  let lx=cx2-pw/2,ly=cy2-fs*2-ph/2;
+  if(placed){const offs=[[0,0],[0,-(ph+4)],[0,ph+4],[pw*0.6,0],[-(pw*0.6),0]];
+  for(const[ox,oy]of offs){const tx2=lx+ox,ty2=ly+oy;if(!placed.some(r=>tx2<r.x+r.w+4&&tx2+pw+4>r.x&&ty2<r.y+r.h+4&&ty2+ph+4>r.y)){lx=tx2;ly=ty2;break;}}
+  placed.push({x:lx,y:ly,w:pw,h:ph});}
+  ctx.fillStyle=isW?"rgba(255,23,68,0.25)":"rgba(33,150,243,0.20)";
+  ctx.beginPath();ctx.roundRect(lx,ly,pw,ph,ph/2);ctx.fill();
+  ctx.strokeStyle=sc+"77";ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(lx,ly,pw,ph,ph/2);ctx.stroke();
+  ctx.fillStyle=sc;ctx.beginPath();ctx.arc(lx+11,ly+ph/2,3.5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=sc+"44";ctx.beginPath();ctx.arc(lx+11,ly+ph/2,6,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#FFF";ctx.fillText(text,lx+pw/2+4,ly+ph/2);ctx.restore();
+}
+
+function drawSkel(ctx,lm,cw,ch,isMW){
+  const conns=getSkeletonConnections(lm,cw,ch);const pp=(i)=>({x:lm[i].x*cw,y:lm[i].y*ch});
+  const ci=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+  ctx.save();ctx.lineWidth=2;ctx.setLineDash([4,4]);ctx.lineCap="round";
+  ci.forEach(([ai,bi],idx)=>{const am=JOINT_MUSCLE_MAP[ai]||[],bm=JOINT_MUSCLE_MAP[bi]||[];
+  const hw=[...am,...bm].some(m=>isMW(m));ctx.strokeStyle=hw?"rgba(255,23,68,0.55)":"rgba(33,150,243,0.50)";
+  const[a,b]=conns[idx];ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();});
+  ctx.setLineDash([]);
+  [11,12,13,14,15,16,23,24,25,26,27,28].forEach(i=>{const{x,y}=pp(i);const rm=JOINT_MUSCLE_MAP[i]||[];
+  const jw=rm.some(m=>isMW(m));if(jw){ctx.fillStyle="rgba(255,23,68,0.25)";ctx.beginPath();ctx.arc(x,y,12,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="rgba(255,23,68,0.90)";ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();}
+  else{ctx.fillStyle="rgba(33,150,243,0.70)";ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();}});
+  ctx.restore();
+}
+
+function renderFull(ctx,lm,ek,cw,ch,opts){
+  const{glowIntensity=0.7,showSkeleton=true,showLabels=true,time=0,muscleStates=null,poseStatus="correct"}=opts;
+  const ex=EXERCISE_DB[ek];if(!ex||!lm)return;
+  const pos=getMusclePositions(lm,cw,ch),bs=getBodyScale(lm,cw);
+  function isMW(mk){if(muscleStates&&muscleStates[mk])return muscleStates[mk].status==="wrong";return poseStatus==="wrong";}
+  const am=new Map();ex.primary.forEach(k=>am.set(k,"primary"));ex.secondary.forEach(k=>{if(!am.has(k))am.set(k,"secondary");});
+  ctx.save();ctx.fillStyle="rgba(0,0,0,0.15)";ctx.fillRect(0,0,cw,ch);ctx.restore();
+  ctx.save();ctx.globalCompositeOperation="screen";
+  RENDER_ORDER.forEach(mk=>{const lv=am.get(mk);if(!lv)return;const reg=MUSCLE_REGIONS[mk],pts=pos[mk],sh=MUSCLE_SHAPES[mk];if(!reg||!pts)return;
+  const ip=lv==="primary",r=(ip?28:20)*bs*(sh?.scale||1),ba=(ip?0.50:0.25)*glowIntensity;
+  pts.forEach(pt=>drawGlow(ctx,pt,mk,r,ba,sh,isMW(mk),time));});ctx.restore();
+  RENDER_ORDER.forEach(mk=>{const lv=am.get(mk);if(!lv||lv!=="primary"||!isMW(mk))return;
+  const pts=pos[mk],sh=MUSCLE_SHAPES[mk];if(!pts||!pts.length)return;drawWarn(ctx,pts[0],28*bs*(sh?.scale||1),time);});
+  RENDER_ORDER.forEach(mk=>{const lv=am.get(mk);if(!lv||lv!=="primary"||!isMW(mk))return;
+  const pts=pos[mk],sh=MUSCLE_SHAPES[mk];if(!pts||!pts.length)return;const r=28*bs*(sh?.scale||1);
+  let ca=DEFAULT_CORR[mk]??-Math.PI/4;
+  const ccx=pts.reduce((s,p)=>s+p.x,0)/pts.length,ccy=pts.reduce((s,p)=>s+p.y,0)/pts.length;
+  drawArrow(ctx,{x:ccx,y:ccy},ca,r*1.5,time);});
+  if(showLabels){const drawn=new Set(),placed=[];RENDER_ORDER.forEach(mk=>{if(!ex.primary.includes(mk)||drawn.has(mk))return;drawn.add(mk);
+  const reg=MUSCLE_REGIONS[mk],pts=pos[mk];if(!reg||!pts)return;drawLabel(ctx,pts,reg.label,mk,isMW(mk),cw,placed);});}
+  if(showSkeleton)drawSkel(ctx,lm,cw,ch,isMW);
+}
+
+// ── Mock landmarks ──
+function mockLandmarks(){
+  const lm=Array.from({length:33},()=>({x:0.5,y:0.5}));
+  lm[0]={x:0.50,y:0.14};lm[11]={x:0.38,y:0.24};lm[12]={x:0.62,y:0.24};
+  lm[13]={x:0.32,y:0.36};lm[14]={x:0.68,y:0.36};lm[15]={x:0.30,y:0.46};lm[16]={x:0.70,y:0.46};
+  lm[23]={x:0.42,y:0.52};lm[24]={x:0.58,y:0.52};lm[25]={x:0.40,y:0.68};lm[26]={x:0.60,y:0.68};
+  lm[27]={x:0.39,y:0.86};lm[28]={x:0.61,y:0.86};
+  return lm;
+}
+
+function drawSilhouette(ctx,lm,cw,ch){
+  const p=(i)=>({x:lm[i].x*cw,y:lm[i].y*ch});
+  ctx.fillStyle="#1a1a2e";ctx.fillRect(0,0,cw,ch);
+  const head=p(0),ls=p(11),rs=p(12),lh=p(23),rh=p(24),lk=p(25),rk=p(26),la=p(27),ra=p(28),le=p(13),re=p(14),lw=p(15),rw=p(16);
+  const headR=Math.abs(rs.x-ls.x)*0.22;
+  ctx.fillStyle="rgba(50,50,80,0.6)";
+  ctx.beginPath();ctx.arc(head.x,head.y-headR*0.3,headR,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.moveTo(ls.x,ls.y);ctx.lineTo(rs.x,rs.y);ctx.lineTo(rh.x+8,rh.y);ctx.lineTo(lh.x-8,lh.y);ctx.closePath();ctx.fill();
+  ctx.lineWidth=Math.abs(rs.x-ls.x)*0.12;ctx.lineCap="round";ctx.strokeStyle="rgba(50,50,80,0.6)";
+  ctx.beginPath();ctx.moveTo(ls.x,ls.y);ctx.lineTo(le.x,le.y);ctx.lineTo(lw.x,lw.y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(rs.x,rs.y);ctx.lineTo(re.x,re.y);ctx.lineTo(rw.x,rw.y);ctx.stroke();
+  ctx.lineWidth=Math.abs(rs.x-ls.x)*0.14;
+  ctx.beginPath();ctx.moveTo(lh.x,lh.y);ctx.lineTo(lk.x,lk.y);ctx.lineTo(la.x,la.y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(rh.x,rh.y);ctx.lineTo(rk.x,rk.y);ctx.lineTo(ra.x,ra.y);ctx.stroke();
+}
+
+// ── Test Configurations ──
+const lm = mockLandmarks();
+const W = 360, H = 500;
+const time = 1.5; // static capture time
+
+const tests = [
+  // Row 1: Squat 3 modes
+  { exercise: "squat", title: "스쿼트 — 올바른 자세 (파란)", poseStatus: "correct", muscleStates: null, row: "row1" },
+  { exercise: "squat", title: "스쿼트 — 잘못된 자세 (빨간)", poseStatus: "wrong", muscleStates: null, row: "row1" },
+  { exercise: "squat", title: "스쿼트 — 혼합 (대퇴사두근 잘못)", poseStatus: "correct",
+    muscleStates: { quadriceps: { status: "wrong" }, glutes: { status: "correct" } }, row: "row1" },
+  // Row 2: Different exercises
+  { exercise: "benchPress", title: "벤치프레스 — 올바른 (파란)", poseStatus: "correct", muscleStates: null, row: "row2" },
+  { exercise: "benchPress", title: "벤치프레스 — 가슴 잘못 (빨간)", poseStatus: "correct",
+    muscleStates: { chest: { status: "wrong" }, triceps: { status: "correct" } }, row: "row2" },
+  { exercise: "deadlift", title: "데드리프트 — 허리 잘못 (빨간)", poseStatus: "correct",
+    muscleStates: { hamstrings: { status: "correct" }, glutes: { status: "correct" }, lowerBack: { status: "wrong" } }, row: "row2" },
+];
+
+tests.forEach(t => {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `<h3>${t.title}</h3>`;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+  card.appendChild(canvas);
+  document.getElementById(t.row).appendChild(card);
+
+  const ctx = canvas.getContext("2d");
+  drawSilhouette(ctx, lm, W, H);
+  renderFull(ctx, lm, t.exercise, W, H, {
+    glowIntensity: 0.7,
+    showSkeleton: true,
+    showLabels: true,
+    time: time,
+    muscleStates: t.muscleStates,
+    poseStatus: t.poseStatus,
+  });
+});
+
+document.getElementById("status").textContent = "렌더링 완료 — 6개 테스트 케이스";
+
+// Animate row1 canvases for pulse check
+const animCanvases = document.querySelectorAll("#row1 canvas");
+let start = performance.now();
+function animate() {
+  const t = (performance.now() - start) / 1000;
+  animCanvases.forEach((c, i) => {
+    const ctx = c.getContext("2d");
+    const test = tests[i];
+    ctx.clearRect(0, 0, W, H);
+    drawSilhouette(ctx, lm, W, H);
+    renderFull(ctx, lm, test.exercise, W, H, {
+      glowIntensity: 0.7, showSkeleton: true, showLabels: true, time: t,
+      muscleStates: test.muscleStates, poseStatus: test.poseStatus,
+    });
+  });
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

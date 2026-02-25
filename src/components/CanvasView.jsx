@@ -1,124 +1,105 @@
-import { useRef, useEffect } from "react";
-import { renderMuscleOverlay } from "../lib/muscleRenderer";
-import { EXERCISE_DB } from "../data/exercises";
-import { MUSCLE_REGIONS } from "../data/muscles";
-import { getMuscleDisplayColor, getMuscleQuality, CORRECT_COLOR, INCORRECT_COLOR } from "../lib/poseAnalyzer";
+import { useRef, useEffect, useCallback } from "react";
+import { renderMuscleOverlay, resetTransitions } from "../lib/muscleRenderer";
 
 export default function CanvasView({
-  image, landmarks, exerciseKey, canvasSize,
-  glowIntensity, showSkeleton, showLabels = true,
+  imageUrl,
+  landmarks,
+  exerciseKey,
+  poseResult,
+  glowIntensity,
+  showSkeleton,
   canvasRef: externalRef,
-  poseQuality = null,
 }) {
   const internalRef = useRef(null);
-  const canvasRef = externalRef || internalRef;
+  const overlayRef = useRef(null);
+  const imageRef = useRef(null);
   const animRef = useRef(null);
+  const canvasRef = externalRef || internalRef;
 
-  const exercise = EXERCISE_DB[exerciseKey];
-  const allMuscles = [...Object.keys(exercise?.primary || {}), ...Object.keys(exercise?.secondary || {})];
-  const muscleQualityMap = poseQuality ? getMuscleQuality(poseQuality) : null;
+  const draw = useCallback(
+    (time) => {
+      const canvas = canvasRef.current;
+      const overlay = overlayRef.current;
+      if (!canvas || !overlay || !imageRef.current) return;
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !image) return;
+      const ctx = canvas.getContext("2d");
+      const octx = overlay.getContext("2d");
+      const img = imageRef.current;
 
-    const ctx = canvas.getContext("2d");
-    let startTime = performance.now();
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
 
-    function draw() {
-      const time = (performance.now() - startTime) / 1000;
-      ctx.clearRect(0, 0, canvasSize.w, canvasSize.h);
-      ctx.drawImage(image, 0, 0, canvasSize.w, canvasSize.h);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        overlay.width = w;
+        overlay.height = h;
+      }
 
-      if (landmarks) {
-        renderMuscleOverlay(ctx, landmarks, exerciseKey, canvasSize.w, canvasSize.h, {
+      // 원본 이미지
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+
+      // 글로우 오버레이
+      octx.clearRect(0, 0, w, h);
+      if (landmarks && exerciseKey) {
+        renderMuscleOverlay(octx, landmarks, exerciseKey, w, h, {
           glowIntensity,
           showSkeleton,
-          showLabels,
-          time,
-          poseQuality,
+          showLabels: true,
+          time: time / 1000,
+          muscleStates: poseResult?.muscleStates || null,
+          poseStatus: poseResult?.status || "correct",
         });
       }
 
-      animRef.current = requestAnimationFrame(draw);
-    }
+      // 합성
+      ctx.drawImage(overlay, 0, 0);
 
-    draw();
+      animRef.current = requestAnimationFrame(draw);
+    },
+    [landmarks, exerciseKey, poseResult, glowIntensity, showSkeleton, canvasRef]
+  );
+
+  useEffect(() => {
+    if (!imageUrl) return;
+
+    const img = new Image();
+    img.onload = () => {
+      imageRef.current = img;
+      resetTransitions();
+      animRef.current = requestAnimationFrame(draw);
+    };
+    img.src = imageUrl;
+
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
-  }, [image, landmarks, exerciseKey, canvasSize, glowIntensity, showSkeleton, showLabels, poseQuality]);
+  }, [imageUrl, draw]);
+
+  // 운동 변경 시 전환 리셋
+  useEffect(() => {
+    resetTransitions();
+  }, [exerciseKey]);
 
   return (
-    <div style={{ position: "relative", display: "inline-block" }}>
-      <canvas
-        ref={canvasRef}
-        width={canvasSize.w}
-        height={canvasSize.h}
-        style={{
-          width: "100%", maxWidth: canvasSize.w, height: "auto",
-          borderRadius: 16, display: "block",
-        }}
-      />
+    <div className="canvas-container">
+      <canvas ref={canvasRef} className="main-canvas" />
+      <canvas ref={overlayRef} style={{ display: "none" }} />
 
-      {/* exercise badge - top left */}
-      {exercise && (
-        <div style={{
-          position: "absolute", top: 12, left: 12,
-          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(10px)",
-          borderRadius: 10, padding: "8px 14px",
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <span style={{ fontSize: 18 }}>{exercise.icon}</span>
-          <div>
-            <div style={{ color: "#fff", fontSize: 14, fontWeight: 700, lineHeight: 1.2 }}>{exercise.name}</div>
-            <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 10, marginTop: 2 }}>
-              {Object.keys(exercise.primary).map(k => MUSCLE_REGIONS[k]?.label).filter(Boolean).join(" · ")}
-            </div>
-          </div>
+      {exerciseKey && poseResult && (
+        <div className={`canvas-badge badge-${poseResult.status}`}>
+          <span className="badge-score">{poseResult.score}</span>
+          <span className="badge-label">
+            {poseResult.status === "correct" ? "✓ 올바른 자세" : poseResult.status === "caution" ? "⚠ 주의" : "✗ 교정 필요"}
+          </span>
         </div>
       )}
 
-      {/* muscle legend - bottom with quality colors */}
-      {allMuscles.length > 0 && (
-        <div style={{
-          position: "absolute", bottom: 12, left: 12, right: 12,
-          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(10px)",
-          borderRadius: 10, padding: "8px 14px",
-          display: "flex", flexWrap: "wrap", gap: "6px 14px",
-          justifyContent: "center",
-        }}>
-          {allMuscles.map((key) => {
-            const m = MUSCLE_REGIONS[key];
-            if (!m) return null;
-            const isPrimary = (key in exercise.primary);
-            const mq = muscleQualityMap?.[key];
-            const color = mq ? getMuscleDisplayColor(mq.score) : (poseQuality?.status !== 'bad' ? CORRECT_COLOR : m.color);
-            const qualityLabel = mq ? (mq.isCorrect ? "OK" : "FIX") : "";
-            return (
-              <div key={key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <div style={{
-                  width: isPrimary ? 8 : 6, height: isPrimary ? 8 : 6,
-                  borderRadius: "50%", background: color,
-                  boxShadow: isPrimary ? `0 0 8px ${color}` : "none",
-                }} />
-                <span style={{
-                  color: isPrimary ? "#fff" : "rgba(255,255,255,0.45)",
-                  fontSize: 11, fontWeight: isPrimary ? 600 : 400,
-                }}>
-                  {m.label}
-                </span>
-                {isPrimary && qualityLabel && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
-                    background: color + "33", color: color,
-                  }}>
-                    {qualityLabel}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+      {landmarks && exerciseKey && (
+        <div className="canvas-legend">
+          <span className="legend-item legend-correct">● 올바른 자세</span>
+          <span className="legend-item legend-wrong">● 잘못된 자세</span>
         </div>
       )}
     </div>
