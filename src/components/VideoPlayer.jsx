@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { renderMuscleOverlay, resetTransitions } from "../lib/muscleRenderer";
-import { detectVideoFrame } from "../lib/poseDetector";
+import { detectVideoFrame, resetVideoTimestamp } from "../lib/poseDetector";
 import { analyzePose } from "../lib/poseAnalyzer";
 import { EXERCISE_DB } from "../data/exercises";
 
@@ -15,6 +15,8 @@ export default function VideoPlayer({
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animRef = useRef(null);
+  const detectingRef = useRef(false);
+  const lastResultRef = useRef(null);
   const worstRef = useRef({ score: 101, time: 0, landmarks: null });
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -30,6 +32,11 @@ export default function VideoPlayer({
       const w = video.videoWidth;
       const h = video.videoHeight;
 
+      if (!w || !h) {
+        animRef.current = requestAnimationFrame(processFrame);
+        return;
+      }
+
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
@@ -38,43 +45,63 @@ export default function VideoPlayer({
       // 비디오 프레임 그리기
       ctx.drawImage(video, 0, 0, w, h);
 
-      // MediaPipe 감지 (비동기지만 fire-and-forget으로 오버레이 렌더)
-      detectVideoFrame(video, timestamp).then((result) => {
-        if (!result || !exerciseKey) return;
-
-        const exercise = EXERCISE_DB[exerciseKey];
-        if (!exercise) return;
-
-        const poseResult = analyzePose(result.landmarks, exerciseKey, exercise);
-
-        // 오버레이 렌더
-        const octx = canvas.getContext("2d");
-        octx.drawImage(video, 0, 0, w, h);
-        renderMuscleOverlay(octx, result.landmarks, exerciseKey, w, h, {
+      // 이전 감지 결과가 있으면 오버레이 렌더 (감지 대기 중에도 표시)
+      if (lastResultRef.current && exerciseKey) {
+        const { landmarks: prevLm, poseResult: prevPr } = lastResultRef.current;
+        renderMuscleOverlay(ctx, prevLm, exerciseKey, w, h, {
           glowIntensity,
           showSkeleton,
           showLabels: true,
           time: timestamp / 1000,
-          muscleStates: poseResult.muscleStates,
-          poseStatus: poseResult.status,
+          muscleStates: prevPr.muscleStates,
+          poseStatus: prevPr.status,
         });
+      }
 
-        // worst frame 추적
-        if (!result.isFallback && poseResult.score < worstRef.current.score) {
-          worstRef.current = {
-            score: poseResult.score,
-            time: video.currentTime,
-            landmarks: result.landmarks,
-          };
-          onWorstFrame?.({
-            score: poseResult.score,
-            time: video.currentTime,
-            landmarks: result.landmarks,
+      // 이전 감지가 아직 진행 중이면 새 감지 시작하지 않음 (직렬화)
+      if (!detectingRef.current && exerciseKey) {
+        detectingRef.current = true;
+        const ts = Math.round(timestamp);
+
+        detectVideoFrame(video, ts)
+          .then((result) => {
+            if (!result) {
+              detectingRef.current = false;
+              return;
+            }
+
+            const exercise = EXERCISE_DB[exerciseKey];
+            if (!exercise) {
+              detectingRef.current = false;
+              return;
+            }
+
+            const poseResult = analyzePose(result.landmarks, exerciseKey, exercise);
+
+            // 결과 캐시 (다음 프레임에서 오버레이 유지)
+            lastResultRef.current = { landmarks: result.landmarks, poseResult };
+
+            // worst frame 추적
+            if (!result.isFallback && poseResult.score < worstRef.current.score) {
+              worstRef.current = {
+                score: poseResult.score,
+                time: video.currentTime,
+                landmarks: result.landmarks,
+              };
+              onWorstFrame?.({
+                score: poseResult.score,
+                time: video.currentTime,
+                landmarks: result.landmarks,
+              });
+            }
+
+            onPoseUpdate?.(result.landmarks, poseResult);
+            detectingRef.current = false;
+          })
+          .catch(() => {
+            detectingRef.current = false;
           });
-        }
-
-        onPoseUpdate?.(result.landmarks, poseResult);
-      });
+      }
 
       setCurrentTime(video.currentTime);
       animRef.current = requestAnimationFrame(processFrame);
@@ -88,6 +115,7 @@ export default function VideoPlayer({
 
     video.src = videoUrl;
     video.load();
+    resetVideoTimestamp();
 
     video.onloadedmetadata = () => {
       setDuration(video.duration);
@@ -108,6 +136,7 @@ export default function VideoPlayer({
 
   useEffect(() => {
     resetTransitions();
+    lastResultRef.current = null;
     worstRef.current = { score: 101, time: 0, landmarks: null };
   }, [exerciseKey]);
 
@@ -141,7 +170,13 @@ export default function VideoPlayer({
 
   return (
     <div className="video-container">
-      <video ref={videoRef} style={{ display: "none" }} muted playsInline />
+      {/* visibility:hidden + position:absolute로 프레임 디코딩 유지 */}
+      <video
+        ref={videoRef}
+        style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+        muted
+        playsInline
+      />
       <canvas ref={canvasRef} className="main-canvas" />
 
       <div className="video-controls">
