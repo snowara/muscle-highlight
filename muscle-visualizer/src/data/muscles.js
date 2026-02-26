@@ -108,4 +108,20 @@ export const MUSCLE_REGIONS = {
     bodyPart: "하체 하부",
     englishName: "Gastrocnemius / Soleus",
   },
+  adductors: {
+    label: "내전근",
+    simpleLabel: "허벅지 안쪽",
+    detail: "허벅지 안쪽에서 다리를 모아주는 근육군. 스쿼트·런지 시 안정성을 잡아줘요.",
+    color: "#B2FF59",
+    bodyPart: "하체",
+    englishName: "Adductor Magnus / Longus / Brevis",
+  },
+  tibialis: {
+    label: "전경골근",
+    simpleLabel: "정강이",
+    detail: "정강이 앞쪽 근육. 발을 들어올리고 걸을 때 착지 충격을 흡수해요.",
+    color: "#EEFF41",
+    bodyPart: "하체 하부",
+    englishName: "Tibialis Anterior",
+  },
 };

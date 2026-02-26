@@ -2,7 +2,7 @@ import { useRef, useEffect } from "react";
 import { renderMuscleOverlay } from "../lib/muscleRenderer";
 import { EXERCISE_DB } from "../data/exercises";
 import { MUSCLE_REGIONS } from "../data/muscles";
-import { getScoreColor } from "../lib/poseAnalyzer";
+
 
 export default function CanvasView({
   image, landmarks, exerciseKey, canvasSize,
@@ -43,8 +43,6 @@ export default function CanvasView({
     };
   }, [image, landmarks, exerciseKey, canvasSize, glowIntensity, showSkeleton, showLabels, muscleStatus]);
 
-  const scoreColor = analysis ? getScoreColor(analysis.level) : null;
-
   return (
     <div style={{ position: "relative", display: "inline-block", width: "100%" }}>
       <canvas
@@ -74,19 +72,6 @@ export default function CanvasView({
               {Object.keys(exercise.primary || {}).map(k => MUSCLE_REGIONS[k]?.label).filter(Boolean).join(" · ")}
             </div>
           </div>
-          {/* 점수 배지 */}
-          {scoreColor && (
-            <div style={{
-              background: scoreColor.bg, borderRadius: 8,
-              padding: "4px 10px", marginLeft: 4,
-              display: "flex", alignItems: "center", gap: 4,
-            }}>
-              <span style={{ color: "#fff", fontSize: 15, fontWeight: 800 }}>
-                {analysis.score}
-              </span>
-              <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 9, fontWeight: 600 }}>점</span>
-            </div>
-          )}
         </div>
       )}
 

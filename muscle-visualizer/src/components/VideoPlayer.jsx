@@ -253,14 +253,6 @@ export default function VideoPlayer({
           }}>
             <span style={{ fontSize: 18 }}>{exercise.icon}</span>
             <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>{exercise.name}</span>
-            {scoreColor && (
-              <div style={{
-                background: scoreColor.bg, borderRadius: 8, padding: "3px 8px",
-              }}>
-                <span style={{ color: "#fff", fontSize: 14, fontWeight: 800 }}>{currentAnalysis.score}</span>
-                <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 9, marginLeft: 2 }}>점</span>
-              </div>
-            )}
           </div>
         )}
 

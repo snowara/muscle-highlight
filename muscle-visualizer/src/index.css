@@ -63,6 +63,7 @@ input[type="range"]::-webkit-slider-thumb {
 @media (min-width: 769px) {
   .result-layout {
     display: flex !important;
+    align-items: flex-start;
     gap: 20px;
     padding: 20px;
     max-width: 1400px;
@@ -75,6 +76,8 @@ input[type="range"]::-webkit-slider-thumb {
   .result-side {
     flex: 1;
     min-width: 0;
+    position: sticky;
+    top: 20px;
     max-height: calc(100vh - 40px);
     overflow-y: auto;
     display: flex;

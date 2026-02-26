@@ -8,7 +8,7 @@ import CorrectionPanel from "./components/CorrectionPanel";
 import MuscleInfo from "./components/MuscleInfo";
 import AnatomicalDiagram from "./components/AnatomicalDiagram";
 import ControlPanel from "./components/ControlPanel";
-import BrandSettings from "./components/BrandSettings";
+// BrandSettings removed
 import Toast from "./components/Toast";
 import AdminPanel from "./components/AdminPanel";
 import { initPoseDetector, prepareImage, detectPose } from "./lib/poseDetector";
@@ -240,8 +240,7 @@ export default function App() {
   const sideContent = {
     analysis: (
       <>
-        <PoseScoreCard analysis={analysis} />
-        <CorrectionPanel analysis={analysis} />
+        <CorrectionPanel analysis={analysis} exerciseKey={effectiveExerciseKey} />
       </>
     ),
     muscles: (
@@ -267,8 +266,6 @@ export default function App() {
           showLabels={showLabels} setShowLabels={setShowLabels}
           showCorrections={showCorrections} setShowCorrections={setShowCorrections}
         />
-        <div style={S.divider} />
-        <BrandSettings brand={brand} setBrand={setBrand} />
         <div style={S.divider} />
         <button
           onClick={() => setShowAdmin(true)}
