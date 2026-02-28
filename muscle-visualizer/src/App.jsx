@@ -66,6 +66,9 @@ function appReducer(state, action) {
         analysis: action.analysis,
         isAnalyzing: false,
         appState: "photo",
+        toast: action.isFallback
+          ? "포즈 감지에 실패했습니다. 밝고 선명한 사진을 사용하거나 운동 종류를 직접 선택해주세요."
+          : "",
       };
     case "PHOTO_ANALYSIS_FAIL":
       return { ...state, isAnalyzing: false, toast: "사진 분석에 실패했습니다" };
@@ -164,6 +167,7 @@ export default function App() {
           autoDetected: detectedExercise,
           selectedExercise: exerciseKey,
           analysis: poseAnalysis,
+          isFallback: result.isFallback,
         });
       } catch (e) {
         console.error("[App] Photo analysis failed:", e);
