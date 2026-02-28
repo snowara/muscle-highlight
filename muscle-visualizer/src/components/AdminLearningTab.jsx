@@ -4,11 +4,23 @@
  */
 
 import { EXERCISE_DB } from "../data/exercises";
-import { getDetailedStats, getLearningHistory } from "../lib/learningStore";
+import { getDetailedStats, getLearningHistory, exportForTraining } from "../lib/learningStore";
 
 export default function AdminLearningTab({ onClearLearning, styles }) {
   const stats = getDetailedStats();
   const history = getLearningHistory(30);
+  const trainingData = exportForTraining();
+
+  function handleExportForTraining() {
+    if (trainingData.length === 0) return;
+    const blob = new Blob([JSON.stringify(trainingData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ml-corrections-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div>
@@ -22,6 +34,39 @@ export default function AdminLearningTab({ onClearLearning, styles }) {
           stats.oldestEntry ? `${Math.ceil((Date.now() - stats.oldestEntry) / 86400000)}일` : "-"
         } />
       </div>
+
+      {/* ML 재학습 내보내기 */}
+      <Section title="ML 모델 재학습">
+        <div style={{
+          padding: 14, borderRadius: 10,
+          background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)",
+        }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10, lineHeight: 1.6 }}>
+            사용자가 운동을 수정할 때마다 AI 재학습용 데이터가 자동 축적됩니다.
+            {trainingData.length > 0
+              ? ` 현재 ${trainingData.length}건의 보정 데이터가 있습니다.`
+              : " 아직 보정 데이터가 없습니다."}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              style={{
+                ...styles.primaryBtn,
+                background: trainingData.length > 0 ? "#3B82F6" : "rgba(59,130,246,0.3)",
+                cursor: trainingData.length > 0 ? "pointer" : "not-allowed",
+              }}
+              onClick={handleExportForTraining}
+              disabled={trainingData.length === 0}
+            >
+              재학습 데이터 내보내기 ({trainingData.length}건)
+            </button>
+          </div>
+          {trainingData.length >= 10 && (
+            <div style={{ fontSize: 10, color: "rgba(59,130,246,0.7)", marginTop: 8 }}>
+              scripts/ 폴더에서 실행: node retrainWithCorrections.mjs corrections.json
+            </div>
+          )}
+        </div>
+      </Section>
 
       {/* 운동별 학습 통계 */}
       <ExerciseStatsSection byExercise={stats.byExercise} />

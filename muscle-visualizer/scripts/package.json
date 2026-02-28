@@ -6,6 +6,7 @@
     "generate": "node generateData.mjs",
     "train": "node trainModel.mjs",
     "evaluate": "node evaluateModel.mjs",
+    "retrain": "node retrainWithCorrections.mjs",
     "pipeline": "node generateData.mjs && node trainModel.mjs && node evaluateModel.mjs"
   },
   "dependencies": {
