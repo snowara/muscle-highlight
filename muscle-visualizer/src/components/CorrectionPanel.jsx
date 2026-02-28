@@ -30,11 +30,11 @@ export default function CorrectionPanel({ analysis, exerciseKey }) {
     const text = inputValue.trim();
     if (!text || !exerciseKey) return;
     const all = loadCustomGuides();
-    const list = all[exerciseKey] || [];
-    list.push(text);
-    all[exerciseKey] = list;
-    saveCustomGuides(all);
-    setCustomGuides(list);
+    const prevList = all[exerciseKey] || [];
+    const newList = [...prevList, text];
+    const updated = { ...all, [exerciseKey]: newList };
+    saveCustomGuides(updated);
+    setCustomGuides(newList);
     setInputValue("");
     setIsAdding(false);
   }
@@ -42,11 +42,11 @@ export default function CorrectionPanel({ analysis, exerciseKey }) {
   function handleDelete(index) {
     if (!exerciseKey) return;
     const all = loadCustomGuides();
-    const list = [...(all[exerciseKey] || [])];
-    list.splice(index, 1);
-    all[exerciseKey] = list;
-    saveCustomGuides(all);
-    setCustomGuides(list);
+    const prevList = all[exerciseKey] || [];
+    const newList = prevList.filter((_, i) => i !== index);
+    const updated = { ...all, [exerciseKey]: newList };
+    saveCustomGuides(updated);
+    setCustomGuides(newList);
   }
 
   if (!analysis) return null;
@@ -181,6 +181,7 @@ export default function CorrectionPanel({ analysis, exerciseKey }) {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
               placeholder="교정 코멘트를 입력하세요"
+              maxLength={200}
               autoFocus
               style={{
                 flex: 1, padding: "8px 12px", borderRadius: 8,

@@ -5,21 +5,10 @@
  * 올바른 운동을 저장. 이후 분류 시 유사한 포즈에 대해 보정 점수를 부여.
  */
 
+import { angleDeg, mid } from "./poseUtils";
+
 const STORAGE_KEY = "muscle-highlight-learning";
 const MAX_ENTRIES = 500;
-
-function angleDeg(a, b, c) {
-  const ab = { x: a.x - b.x, y: a.y - b.y };
-  const cb = { x: c.x - b.x, y: c.y - b.y };
-  const dot = ab.x * cb.x + ab.y * cb.y;
-  const mag = Math.sqrt(ab.x ** 2 + ab.y ** 2) * Math.sqrt(cb.x ** 2 + cb.y ** 2);
-  if (mag === 0) return 180;
-  return (Math.acos(Math.max(-1, Math.min(1, dot / mag))) * 180) / Math.PI;
-}
-
-function mid(a, b) {
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-}
 
 // Extract a compact feature vector from landmarks (7 angles + 2 ratios)
 export function extractFeatures(landmarks) {

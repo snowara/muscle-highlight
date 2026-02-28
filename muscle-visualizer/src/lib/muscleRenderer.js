@@ -125,6 +125,88 @@ function drawMuscleLabel(ctx, points, label, color, status, canvasW, placedLabel
   ctx.restore();
 }
 
+// ── 글로우 렌더링 상수 ──
+const PRIMARY_RADIUS = 35;
+const SECONDARY_RADIUS = 25;
+const PRIMARY_ALPHA = 0.75;
+const SECONDARY_ALPHA = 0.4;
+const PULSE_BASE = 0.92;
+const PULSE_AMPLITUDE = 0.08;
+const PULSE_SPEED = 1.5;
+const SKELETON_JOINT_RADIUS = 3;
+const SKELETON_JOINT_INDICES = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+
+/**
+ * 활성 근육에 글로우 이펙트를 렌더링한다.
+ */
+function renderGlowLayer(ctx, positions, activeMuscles, muscleStatus, bodyScale, glowIntensity, pulse) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+
+  RENDER_ORDER.forEach((muscleKey) => {
+    const level = activeMuscles.get(muscleKey);
+    if (!level) return;
+    const points = positions[muscleKey];
+    const shape = MUSCLE_SHAPES[muscleKey];
+    if (!points) return;
+
+    const isPrimary = level === "primary";
+    const status = muscleStatus[muscleKey] || "good";
+    const color = status === "bad" ? BAD_COLOR : GOOD_COLOR;
+
+    const radius = (isPrimary ? PRIMARY_RADIUS : SECONDARY_RADIUS) * bodyScale * (shape?.scale || 1);
+    const alpha = (isPrimary ? PRIMARY_ALPHA : SECONDARY_ALPHA) * glowIntensity * pulse;
+    points.forEach((pt) => drawShapedGlow(ctx, pt, color, radius, alpha, shape));
+  });
+
+  ctx.restore();
+}
+
+/**
+ * 주요 근육에 라벨을 렌더링한다.
+ */
+function renderLabels(ctx, positions, exercise, activeMuscles, muscleStatus, canvasW) {
+  const placedLabels = [];
+  RENDER_ORDER.forEach((muscleKey) => {
+    if (!activeMuscles.has(muscleKey)) return;
+    if (!Object.keys(exercise.primary || {}).includes(muscleKey)) return;
+    const region = MUSCLE_REGIONS[muscleKey];
+    const points = positions[muscleKey];
+    if (!region || !points) return;
+
+    const status = muscleStatus[muscleKey] || "good";
+    const color = status === "bad" ? BAD_COLOR : GOOD_COLOR;
+    drawMuscleLabel(ctx, points, region.label, color, status, canvasW, placedLabels);
+  });
+}
+
+/**
+ * 스켈레톤(뼈대) 라인과 관절 포인트를 렌더링한다.
+ */
+function renderSkeleton(ctx, landmarks, canvasW, canvasH) {
+  const connections = getSkeletonConnections(landmarks, canvasW, canvasH);
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  connections.forEach(([a, b]) => {
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  });
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.setLineDash([]);
+  SKELETON_JOINT_INDICES.forEach((i) => {
+    const x = landmarks[i].x * canvasW;
+    const y = landmarks[i].y * canvasH;
+    ctx.beginPath();
+    ctx.arc(x, y, SKELETON_JOINT_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
 /**
  * 근육 오버레이 렌더링 (빨간/코랄=활성화, 앰버=잘못된 자세)
  *
@@ -144,78 +226,17 @@ export function renderMuscleOverlay(
 
   const positions = getMusclePositions(landmarks, canvasW, canvasH);
   const bodyScale = getBodyScale(landmarks, canvasW);
-  const pulse = 0.92 + Math.sin(time * 1.5) * 0.08;
+  const pulse = PULSE_BASE + Math.sin(time * PULSE_SPEED) * PULSE_AMPLITUDE;
 
-  ctx.save();
-  ctx.globalCompositeOperation = "screen";
-
-  // Collect all active muscles
   const activeMuscles = new Map();
   Object.keys(exercise.primary || {}).forEach((k) => activeMuscles.set(k, "primary"));
   Object.keys(exercise.secondary || {}).forEach((k) => {
     if (!activeMuscles.has(k)) activeMuscles.set(k, "secondary");
   });
 
-  // Render in anatomical depth order
-  RENDER_ORDER.forEach((muscleKey) => {
-    const level = activeMuscles.get(muscleKey);
-    if (!level) return;
-    const points = positions[muscleKey];
-    const shape = MUSCLE_SHAPES[muscleKey];
-    if (!points) return;
-
-    const isPrimary = level === "primary";
-    const status = muscleStatus[muscleKey] || "good";
-    const color = status === "bad" ? BAD_COLOR : GOOD_COLOR;
-
-    const radius = (isPrimary ? 35 : 25) * bodyScale * (shape?.scale || 1);
-    const alpha = (isPrimary ? 0.75 : 0.4) * glowIntensity * pulse;
-    points.forEach((pt) => drawShapedGlow(ctx, pt, color, radius, alpha, shape));
-  });
-
-  ctx.restore();
-
-  // Labels
-  if (showLabels) {
-    const placedLabels = [];
-    RENDER_ORDER.forEach((muscleKey) => {
-      if (!activeMuscles.has(muscleKey)) return;
-      if (!Object.keys(exercise.primary || {}).includes(muscleKey)) return;
-      const region = MUSCLE_REGIONS[muscleKey];
-      const points = positions[muscleKey];
-      if (!region || !points) return;
-
-      const status = muscleStatus[muscleKey] || "good";
-      const color = status === "bad" ? BAD_COLOR : GOOD_COLOR;
-      drawMuscleLabel(ctx, points, region.label, color, status, canvasW, placedLabels);
-    });
-  }
-
-  // Skeleton
-  if (showSkeleton) {
-    const connections = getSkeletonConnections(landmarks, canvasW, canvasH);
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.35)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    connections.forEach(([a, b]) => {
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-    });
-    const indices = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.setLineDash([]);
-    indices.forEach((i) => {
-      const x = landmarks[i].x * canvasW;
-      const y = landmarks[i].y * canvasH;
-      ctx.beginPath();
-      ctx.arc(x, y, 3, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.restore();
-  }
+  renderGlowLayer(ctx, positions, activeMuscles, muscleStatus, bodyScale, glowIntensity, pulse);
+  if (showLabels) renderLabels(ctx, positions, exercise, activeMuscles, muscleStatus, canvasW);
+  if (showSkeleton) renderSkeleton(ctx, landmarks, canvasW, canvasH);
 }
 
 /**

@@ -1,12 +1,18 @@
 /**
- * poseDetector.js — MediaPipe PoseLandmarker 기반 사진/영상 포즈 감지
+ * poseDetector.js -- MediaPipe PoseLandmarker 기반 사진/영상 포즈 감지
  *
  * - 사진: runningMode IMAGE, 최대 800px 리사이즈, EXIF 보정, 33개 랜드마크
  * - 영상: runningMode VIDEO, rAF 루프, 최대 15fps 감지, worst-frame 캡처
- * - 운동 자동 인식: 연속 프레임 관절각도 패턴 기반 추정
+ * - 운동 자동 인식: motionTracker.js로 분리 (re-export)
  * - Fallback: WASM 실패 시 표준 인체비율 랜드마크
- * - 에러: GPU→CPU fallback, 사람 미감지, 타임아웃, 코덱 미지원, 60초 제한
+ * - 에러: GPU->CPU fallback, 사람 미감지, 타임아웃, 코덱 미지원, 60초 제한
  */
+
+import { extractAngles } from "./poseUtils";
+import { MotionTracker, createMotionTracker } from "./motionTracker";
+
+// re-export for backward compatibility
+export { createMotionTracker };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // State
@@ -19,6 +25,9 @@ let mediapipeModule = null;
 // Video processing state
 let videoRafId = null;
 let isVideoProcessing = false;
+
+// WeakMap for video objectURL tracking (instead of expando property)
+const videoUrls = new WeakMap();
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Constants
@@ -365,208 +374,8 @@ export async function detectPoseVideo(videoElement, timestampMs) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 운동 자동 인식 (연속 프레임 관절각도 패턴 분석)
+// 운동 자동 인식 -> motionTracker.js로 분리됨
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-function angleDeg(a, b, c) {
-  const ab = { x: a.x - b.x, y: a.y - b.y };
-  const cb = { x: c.x - b.x, y: c.y - b.y };
-  const dot = ab.x * cb.x + ab.y * cb.y;
-  const mag = Math.sqrt(ab.x ** 2 + ab.y ** 2) * Math.sqrt(cb.x ** 2 + cb.y ** 2);
-  if (mag === 0) return 180;
-  return (Math.acos(Math.max(-1, Math.min(1, dot / mag))) * 180) / Math.PI;
-}
-
-function mid(a, b) {
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-}
-
-function extractAngles(landmarks) {
-  if (!landmarks || landmarks.length < 29) return null;
-  const lm = landmarks;
-
-  const kneeL = angleDeg(lm[23], lm[25], lm[27]);
-  const kneeR = angleDeg(lm[24], lm[26], lm[28]);
-  const elbowL = angleDeg(lm[11], lm[13], lm[15]);
-  const elbowR = angleDeg(lm[12], lm[14], lm[16]);
-  const hipL = angleDeg(lm[11], lm[23], lm[25]);
-  const hipR = angleDeg(lm[12], lm[24], lm[26]);
-  const shoulderL = angleDeg(lm[13], lm[11], lm[23]);
-  const shoulderR = angleDeg(lm[14], lm[12], lm[24]);
-
-  const sMid = mid(lm[11], lm[12]);
-  const hMid = mid(lm[23], lm[24]);
-  const torsoAngle = Math.abs(Math.atan2(hMid.x - sMid.x, hMid.y - sMid.y) * 180 / Math.PI);
-
-  return {
-    knee: (kneeL + kneeR) / 2,
-    elbow: (elbowL + elbowR) / 2,
-    hip: (hipL + hipR) / 2,
-    shoulder: (shoulderL + shoulderR) / 2,
-    torso: torsoAngle,
-    kneeL, kneeR, elbowL, elbowR,
-  };
-}
-
-/**
- * MotionTracker — 연속 프레임의 관절각도 변화로 운동 패턴 추정
- */
-class MotionTracker {
-  constructor() {
-    this.angleHistory = [];
-    this.maxHistory = 90; // ~6초 at 15fps
-    this.detectedExercise = null;
-    this.confidence = 0;
-  }
-
-  reset() {
-    this.angleHistory = [];
-    this.detectedExercise = null;
-    this.confidence = 0;
-  }
-
-  addFrame(landmarks, timestamp) {
-    const angles = extractAngles(landmarks);
-    if (!angles) return null;
-
-    this.angleHistory.push({ angles, timestamp });
-    if (this.angleHistory.length > this.maxHistory) this.angleHistory.shift();
-    if (this.angleHistory.length < 15) return null;
-
-    return this._analyzePattern();
-  }
-
-  _analyzePattern() {
-    const history = this.angleHistory;
-    const len = history.length;
-
-    const kneeValues = history.map((h) => h.angles.knee);
-    const elbowValues = history.map((h) => h.angles.elbow);
-    const hipValues = history.map((h) => h.angles.hip);
-    const shoulderValues = history.map((h) => h.angles.shoulder);
-    const torsoValues = history.map((h) => h.angles.torso);
-
-    const range = (arr) => Math.max(...arr) - Math.min(...arr);
-    const average = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
-
-    const kneeRange = range(kneeValues);
-    const elbowRange = range(elbowValues);
-    const hipRange = range(hipValues);
-    const shoulderRange = range(shoulderValues);
-
-    const avgTorso = average(torsoValues);
-    const avgShoulder = average(shoulderValues);
-    const avgKnee = average(kneeValues);
-
-    const isUpright = avgTorso < 35;
-    const isLeaning = avgTorso >= 35 && avgTorso < 60;
-    const isHorizontal = avgTorso >= 60;
-
-    const hasKneeMotion = kneeRange > 20;
-    const hasElbowMotion = elbowRange > 20;
-    const hasHipMotion = hipRange > 15;
-    const hasShoulderMotion = shoulderRange > 15;
-
-    const scores = {};
-
-    // 스쿼트
-    scores.squat = 0;
-    if (isUpright) scores.squat += 25;
-    if (hasKneeMotion && kneeRange > 30) scores.squat += 35;
-    if (hasHipMotion) scores.squat += 20;
-    if (!hasElbowMotion) scores.squat += 10;
-
-    // 벤치프레스
-    scores.benchPress = 0;
-    if (isHorizontal) scores.benchPress += 30;
-    if (hasElbowMotion && elbowRange > 25) scores.benchPress += 30;
-    if (!hasKneeMotion) scores.benchPress += 15;
-
-    // 바이셉 컬
-    scores.bicepCurl = 0;
-    if (isUpright) scores.bicepCurl += 20;
-    if (hasElbowMotion && elbowRange > 30) scores.bicepCurl += 35;
-    if (!hasKneeMotion) scores.bicepCurl += 10;
-    if (!hasShoulderMotion || shoulderRange < 20) scores.bicepCurl += 15;
-    if (avgShoulder < 40) scores.bicepCurl += 10;
-
-    // 숄더프레스
-    scores.shoulderPress = 0;
-    if (isUpright) scores.shoulderPress += 15;
-    if (hasShoulderMotion && shoulderRange > 20) scores.shoulderPress += 30;
-    if (hasElbowMotion) scores.shoulderPress += 20;
-    if (avgShoulder > 100) scores.shoulderPress += 20;
-
-    // 데드리프트
-    scores.deadlift = 0;
-    if (isLeaning) scores.deadlift += 25;
-    if (hasHipMotion && hipRange > 20) scores.deadlift += 30;
-    if (kneeRange > 10 && kneeRange < 40) scores.deadlift += 15;
-    if (!hasElbowMotion || elbowRange < 20) scores.deadlift += 15;
-
-    // 랫풀다운
-    scores.latPulldown = 0;
-    if (isUpright) scores.latPulldown += 10;
-    if (hasShoulderMotion && shoulderRange > 25) scores.latPulldown += 25;
-    if (hasElbowMotion && elbowRange > 25) scores.latPulldown += 25;
-    if (avgShoulder > 80) scores.latPulldown += 15;
-
-    // 런지
-    scores.lunge = 0;
-    if (isUpright) scores.lunge += 15;
-    if (hasKneeMotion) scores.lunge += 15;
-    const kneeAsymHistory = history.map((h) => Math.abs(h.angles.kneeL - h.angles.kneeR));
-    const avgKneeAsym = average(kneeAsymHistory);
-    if (avgKneeAsym > 20) scores.lunge += 35;
-    if (avgKneeAsym > 40) scores.lunge += 15;
-
-    // 플랭크
-    scores.plank = 0;
-    if (isHorizontal) scores.plank += 40;
-    if (!hasKneeMotion && !hasElbowMotion && !hasHipMotion) scores.plank += 30;
-    if (avgKnee > 150) scores.plank += 15;
-
-    // 바벨 로우
-    scores.barbellRow = 0;
-    if (isLeaning) scores.barbellRow += 25;
-    if (hasElbowMotion && elbowRange > 20) scores.barbellRow += 30;
-    if (!hasKneeMotion || kneeRange < 15) scores.barbellRow += 10;
-
-    // 레터럴 레이즈
-    scores.lateralRaise = 0;
-    if (isUpright) scores.lateralRaise += 15;
-    if (hasShoulderMotion && shoulderRange > 25) scores.lateralRaise += 35;
-    if (!hasKneeMotion) scores.lateralRaise += 10;
-    if (!hasElbowMotion || elbowRange < 15) scores.lateralRaise += 15;
-
-    // 힙쓰러스트
-    scores.hipThrust = 0;
-    if (isHorizontal || isLeaning) scores.hipThrust += 15;
-    if (hasHipMotion && hipRange > 25) scores.hipThrust += 30;
-    if (kneeRange < 20) scores.hipThrust += 15;
-
-    // 최고 점수
-    let bestKey = null;
-    let bestScore = 0;
-    for (const [key, score] of Object.entries(scores)) {
-      if (score > bestScore) {
-        bestScore = score;
-        bestKey = key;
-      }
-    }
-
-    if (bestScore < 40) return null;
-
-    const confidence = Math.min(100, Math.round(bestScore * 1.1));
-    this.detectedExercise = bestKey;
-    this.confidence = confidence;
-
-    const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-    const top3 = sorted.slice(0, 3).map(([k, v]) => ({ key: k, score: v }));
-
-    return { key: bestKey, confidence, top3 };
-  }
-}
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 영상 실시간 감지 (rAF 루프)
@@ -688,8 +497,8 @@ export async function startVideoDetection(videoElement, callbacks = {}) {
             worstFrameData = { canvas: snapCanvas, landmarks, timestamp: videoElement.currentTime, score };
           }
         }
-      } catch {
-        // skip frame
+      } catch (err) {
+        console.warn("[PoseDetector] 프레임 스킵:", err);
       }
 
       if (videoElement.duration > 0) {
@@ -757,7 +566,7 @@ export function loadVideoFile(videoFile) {
         return;
       }
 
-      video._objectURL = url;
+      videoUrls.set(video, url);
       resolve(video);
     };
 
@@ -796,9 +605,10 @@ export function loadVideoFile(videoFile) {
 export function releaseVideo(videoElement) {
   if (!videoElement) return;
   stopVideoDetection();
-  if (videoElement._objectURL) {
-    URL.revokeObjectURL(videoElement._objectURL);
-    videoElement._objectURL = null;
+  const storedUrl = videoUrls.get(videoElement);
+  if (storedUrl) {
+    URL.revokeObjectURL(storedUrl);
+    videoUrls.delete(videoElement);
   }
   videoElement.src = "";
   videoElement.load();
@@ -844,9 +654,3 @@ export function resetDetector() {
   mediapipeModule = null;
 }
 
-/**
- * MotionTracker 인스턴스 생성 (외부에서 독립적으로 사용)
- */
-export function createMotionTracker() {
-  return new MotionTracker();
-}

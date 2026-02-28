@@ -22,6 +22,12 @@ export default function VideoPlayer({
   const optionsRef = useRef({ glowIntensity, showSkeleton, showLabels });
   const videoSizeRef = useRef({ w: 640, h: 480 });
 
+  // Detection race condition guard
+  const isDetectingRef = useRef(false);
+
+  // currentTime throttle
+  const lastTimeUpdateRef = useRef(0);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoUrl, setVideoUrl] = useState(null);
   const [videoSize, setVideoSize] = useState({ w: 640, h: 480 });
@@ -72,7 +78,70 @@ export default function VideoPlayer({
     }
   }, []);
 
-  // rAF loop — uses refs only, no state dependencies
+  // -- Pose detection + analysis (extracted from processFrame) --
+  const detectAndAnalyze = useCallback(async (canvas, video) => {
+    if (isDetectingRef.current) return;
+    isDetectingRef.current = true;
+
+    const { w, h } = videoSizeRef.current;
+    const timestampMs = Math.round(video.currentTime * 1000);
+
+    try {
+      const result = await detectPoseVideo(canvas, timestampMs);
+
+      if (!result.isFallback && result.landmarks) {
+        landmarksRef.current = result.landmarks;
+
+        // Auto-detect exercise from first frames
+        const eKey = exerciseKeyRef.current;
+        if (video.currentTime < 2 && eKey === "auto" && !exerciseDetectedRef.current) {
+          const detected = classifyExercise(result.landmarks);
+          if (detected.confidence > 30) {
+            exerciseDetectedRef.current = true;
+            onExerciseDetected?.(detected);
+          }
+        }
+
+        // Analyze pose
+        const effectiveKey = eKey === "auto" ? "squat" : eKey;
+        const poseAnalysis = analyzePose(result.landmarks, effectiveKey);
+        analysisRef.current = poseAnalysis;
+        setCurrentAnalysis(poseAnalysis);
+        onAnalysisUpdate?.(poseAnalysis);
+
+        // Record score for timeline
+        scoreHistoryRef.current = [
+          ...scoreHistoryRef.current,
+          { time: video.currentTime, score: poseAnalysis.score, level: poseAnalysis.level },
+        ];
+
+        // Track worst frame (capture canvas snapshot)
+        trackWorstFrame(poseAnalysis, video, w, h);
+      }
+    } catch (err) {
+      console.warn("[VideoPlayer] Frame detection failed:", err);
+    } finally {
+      isDetectingRef.current = false;
+    }
+  }, [onExerciseDetected, onAnalysisUpdate]);
+
+  // -- Worst frame tracker --
+  const trackWorstFrame = useCallback((poseAnalysis, video, w, h) => {
+    if (poseAnalysis.score < worstFrameRef.current.score) {
+      const snapCanvas = document.createElement("canvas");
+      snapCanvas.width = w;
+      snapCanvas.height = h;
+      snapCanvas.getContext("2d").drawImage(video, 0, 0, w, h);
+      worstFrameRef.current = {
+        score: poseAnalysis.score,
+        time: video.currentTime,
+        canvas: snapCanvas,
+        landmarks: landmarksRef.current,
+      };
+    }
+  }, []);
+
+  // -- rAF loop --
   const processFrame = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -85,82 +154,42 @@ export default function VideoPlayer({
     // Draw video frame
     ctx.drawImage(video, 0, 0, w, h);
 
-    // Detect pose periodically
+    // Detect pose periodically (with guard)
     if (now - lastDetectTime.current > detectInterval) {
       lastDetectTime.current = now;
-
-      const timestampMs = Math.round(video.currentTime * 1000);
-
-      (async () => {
-        try {
-          const result = await detectPoseVideo(canvas, timestampMs);
-
-          if (!result.isFallback && result.landmarks) {
-            landmarksRef.current = result.landmarks;
-
-            // Auto-detect exercise from first frames
-            const eKey = exerciseKeyRef.current;
-            if (video.currentTime < 2 && eKey === "auto" && !exerciseDetectedRef.current) {
-              const detected = classifyExercise(result.landmarks);
-              if (detected.confidence > 30) {
-                exerciseDetectedRef.current = true;
-                onExerciseDetected?.(detected);
-              }
-            }
-
-            // Analyze pose
-            const effectiveKey = eKey === "auto" ? "squat" : eKey;
-            const analysis = analyzePose(result.landmarks, effectiveKey);
-            analysisRef.current = analysis;
-            setCurrentAnalysis(analysis);
-            onAnalysisUpdate?.(analysis);
-
-            // Record score for timeline
-            scoreHistoryRef.current.push({
-              time: video.currentTime,
-              score: analysis.score,
-              level: analysis.level,
-            });
-
-            // Track worst frame (capture canvas snapshot)
-            if (analysis.score < worstFrameRef.current.score) {
-              const snapCanvas = document.createElement("canvas");
-              snapCanvas.width = w;
-              snapCanvas.height = h;
-              snapCanvas.getContext("2d").drawImage(video, 0, 0, w, h);
-              worstFrameRef.current = {
-                score: analysis.score,
-                time: video.currentTime,
-                canvas: snapCanvas,
-                landmarks: result.landmarks,
-              };
-            }
-          }
-        } catch {
-          // Skip failed detection
-        }
-      })();
+      detectAndAnalyze(canvas, video);
     }
 
     // Render overlay using refs
-    const landmarks = landmarksRef.current;
-    if (landmarks) {
-      const eKey = exerciseKeyRef.current;
-      const effectiveKey = eKey === "auto" ? "squat" : eKey;
-      const muscleStatus = analysisRef.current?.muscleStatus || {};
-      const opts = optionsRef.current;
-      renderMuscleOverlay(ctx, landmarks, effectiveKey, w, h, {
-        glowIntensity: opts.glowIntensity,
-        showSkeleton: opts.showSkeleton,
-        showLabels: opts.showLabels,
-        time: video.currentTime,
-        muscleStatus,
-      });
+    renderOverlay(ctx, w, h, video.currentTime);
+
+    // Throttled currentTime update (200ms interval)
+    if (now - lastTimeUpdateRef.current > 200) {
+      setCurrentTime(video.currentTime);
+      lastTimeUpdateRef.current = now;
     }
 
-    setCurrentTime(video.currentTime);
     animRef.current = requestAnimationFrame(processFrame);
-  }, []); // No dependencies — uses refs only
+  }, [detectAndAnalyze]);
+
+  // -- Render muscle overlay --
+  const renderOverlay = useCallback((ctx, w, h, videoTime) => {
+    const landmarks = landmarksRef.current;
+    if (!landmarks) return;
+
+    const eKey = exerciseKeyRef.current;
+    const effectiveKey = eKey === "auto" ? "squat" : eKey;
+    const muscleStatus = analysisRef.current?.muscleStatus || {};
+    const opts = optionsRef.current;
+
+    renderMuscleOverlay(ctx, landmarks, effectiveKey, w, h, {
+      glowIntensity: opts.glowIntensity,
+      showSkeleton: opts.showSkeleton,
+      showLabels: opts.showLabels,
+      time: videoTime,
+      muscleStatus,
+    });
+  }, []);
 
   // Play/Pause handling
   useEffect(() => {
@@ -179,7 +208,6 @@ export default function VideoPlayer({
       setIsPlaying(false);
       if (animRef.current) cancelAnimationFrame(animRef.current);
       setScoreTimeline([...scoreHistoryRef.current]);
-      // 영상 종료 시 worst frame을 부모에 전달
       if (worstFrameRef.current.canvas) {
         onWorstFrameRef.current?.(worstFrameRef.current);
       }
@@ -194,7 +222,6 @@ export default function VideoPlayer({
       video.removeEventListener("pause", onPause);
       video.removeEventListener("ended", onEnded);
       if (animRef.current) cancelAnimationFrame(animRef.current);
-      // Pause video on unmount to stop any pending detection
       if (!video.paused) video.pause();
     };
   }, [processFrame]);
@@ -202,7 +229,6 @@ export default function VideoPlayer({
   const effectiveKey = exerciseKey === "auto" ? "squat" : exerciseKey;
   const exercise = EXERCISE_DB[effectiveKey];
   const scoreColor = currentAnalysis ? getScoreColor(currentAnalysis.level) : null;
-
   const timelineSegments = scoreTimeline.length > 0 ? scoreTimeline : scoreHistoryRef.current;
 
   function handleTimelineClick(e) {
@@ -257,125 +283,162 @@ export default function VideoPlayer({
         )}
 
         {/* Play/Pause button overlay */}
-        <button
-          onClick={() => {
-            const video = videoRef.current;
-            if (!video) return;
-            if (video.paused) video.play();
-            else video.pause();
-          }}
-          style={{
-            position: "absolute", bottom: 12, right: 12,
-            width: 44, height: 44, borderRadius: "50%",
-            background: "rgba(59,130,246,0.9)", border: "none",
-            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 2px 12px rgba(59,130,246,0.4)",
-          }}
-        >
-          <span style={{ color: "#fff", fontSize: 18, marginLeft: isPlaying ? 0 : 2 }}>
-            {isPlaying ? "⏸" : "▶"}
-          </span>
-        </button>
+        <PlayPauseButton videoRef={videoRef} isPlaying={isPlaying} />
 
         {/* Bottom legend */}
-        {exercise && (
-          <div style={{
-            position: "absolute", bottom: 12, left: 12,
-            background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)",
-            borderRadius: 8, padding: "6px 12px",
-            display: "flex", gap: 10,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#3B82F6" }} />
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>올바른</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#EF4444" }} />
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>잘못된</span>
-            </div>
-          </div>
-        )}
+        {exercise && <BottomLegend />}
       </div>
 
       {/* Progress bar */}
-      <div style={{
-        height: 4, borderRadius: 2, background: "rgba(255,255,255,0.08)",
-        cursor: "pointer", position: "relative",
-      }}
+      <ProgressBar
+        currentTime={currentTime}
+        duration={duration}
         onClick={handleTimelineClick}
-      >
-        <div style={{
-          height: "100%", borderRadius: 2,
-          background: "#3B82F6",
-          width: duration ? `${(currentTime / duration) * 100}%` : "0%",
-          transition: "width 0.1s",
-        }} />
-      </div>
+      />
 
       {/* Score Timeline */}
       {timelineSegments.length > 0 && (
-        <div>
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            marginBottom: 6,
-          }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.5)" }}>
-              자세 점수 타임라인
-            </span>
-            {worstFrameRef.current.score < 80 && (
-              <button
-                onClick={seekToWorstFrame}
-                style={{
-                  fontSize: 10, fontWeight: 600, padding: "3px 8px",
-                  borderRadius: 6, border: "1px solid rgba(239,68,68,0.3)",
-                  background: "rgba(239,68,68,0.1)", color: "#EF4444",
-                  cursor: "pointer",
-                }}
-              >
-                가장 나쁜 자세 보기 ({worstFrameRef.current.score}점)
-              </button>
-            )}
-          </div>
-          <div
-            style={{
-              height: 28, borderRadius: 6, overflow: "hidden",
-              background: "rgba(255,255,255,0.04)",
-              display: "flex", cursor: "pointer", position: "relative",
-            }}
-            onClick={handleTimelineClick}
-          >
-            {timelineSegments.map((seg, i) => {
-              const w = duration ? ((1 / timelineSegments.length) * 100) : 0;
-              const color = seg.level === "good" ? "#E84040" :
-                seg.level === "warning" ? "#FFB020" : "#FF6B35";
-              return (
-                <div
-                  key={i}
-                  style={{
-                    flex: `0 0 ${w}%`,
-                    background: color,
-                    opacity: 0.7,
-                    transition: "opacity 0.1s",
-                    minWidth: 1,
-                  }}
-                  title={`${Math.round(seg.time)}초 - ${seg.score}점`}
-                />
-              );
-            })}
-            {/* Current position indicator */}
-            <div style={{
-              position: "absolute",
-              left: duration ? `${(currentTime / duration) * 100}%` : "0%",
-              top: 0, bottom: 0, width: 2, background: "#fff",
-              boxShadow: "0 0 4px rgba(255,255,255,0.5)",
-            }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>0초</span>
-            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>{Math.round(duration)}초</span>
-          </div>
-        </div>
+        <ScoreTimeline
+          segments={timelineSegments}
+          duration={duration}
+          currentTime={currentTime}
+          worstScore={worstFrameRef.current.score}
+          onTimelineClick={handleTimelineClick}
+          onSeekWorst={seekToWorstFrame}
+        />
       )}
+    </div>
+  );
+}
+
+// -- Sub-components --
+
+function PlayPauseButton({ videoRef, isPlaying }) {
+  function handleClick() {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) video.play();
+    else video.pause();
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      style={{
+        position: "absolute", bottom: 12, right: 12,
+        width: 44, height: 44, borderRadius: "50%",
+        background: "rgba(59,130,246,0.9)", border: "none",
+        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: "0 2px 12px rgba(59,130,246,0.4)",
+      }}
+    >
+      <span style={{ color: "#fff", fontSize: 18, marginLeft: isPlaying ? 0 : 2 }}>
+        {isPlaying ? "⏸" : "▶"}
+      </span>
+    </button>
+  );
+}
+
+function BottomLegend() {
+  return (
+    <div style={{
+      position: "absolute", bottom: 12, left: 12,
+      background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)",
+      borderRadius: 8, padding: "6px 12px",
+      display: "flex", gap: 10,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#3B82F6" }} />
+        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>올바른</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#EF4444" }} />
+        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>잘못된</span>
+      </div>
+    </div>
+  );
+}
+
+function ProgressBar({ currentTime, duration, onClick }) {
+  return (
+    <div style={{
+      height: 4, borderRadius: 2, background: "rgba(255,255,255,0.08)",
+      cursor: "pointer", position: "relative",
+    }}
+      onClick={onClick}
+    >
+      <div style={{
+        height: "100%", borderRadius: 2,
+        background: "#3B82F6",
+        width: duration ? `${(currentTime / duration) * 100}%` : "0%",
+        transition: "width 0.1s",
+      }} />
+    </div>
+  );
+}
+
+function ScoreTimeline({ segments, duration, currentTime, worstScore, onTimelineClick, onSeekWorst }) {
+  return (
+    <div>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: 6,
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.5)" }}>
+          자세 점수 타임라인
+        </span>
+        {worstScore < 80 && (
+          <button
+            onClick={onSeekWorst}
+            style={{
+              fontSize: 10, fontWeight: 600, padding: "3px 8px",
+              borderRadius: 6, border: "1px solid rgba(239,68,68,0.3)",
+              background: "rgba(239,68,68,0.1)", color: "#EF4444",
+              cursor: "pointer",
+            }}
+          >
+            가장 나쁜 자세 보기 ({worstScore}점)
+          </button>
+        )}
+      </div>
+      <div
+        style={{
+          height: 28, borderRadius: 6, overflow: "hidden",
+          background: "rgba(255,255,255,0.04)",
+          display: "flex", cursor: "pointer", position: "relative",
+        }}
+        onClick={onTimelineClick}
+      >
+        {segments.map((seg, i) => {
+          const w = duration ? ((1 / segments.length) * 100) : 0;
+          const color = seg.level === "good" ? "#E84040" :
+            seg.level === "warning" ? "#FFB020" : "#FF6B35";
+          return (
+            <div
+              key={i}
+              style={{
+                flex: `0 0 ${w}%`,
+                background: color,
+                opacity: 0.7,
+                transition: "opacity 0.1s",
+                minWidth: 1,
+              }}
+              title={`${Math.round(seg.time)}초 - ${seg.score}점`}
+            />
+          );
+        })}
+        {/* Current position indicator */}
+        <div style={{
+          position: "absolute",
+          left: duration ? `${(currentTime / duration) * 100}%` : "0%",
+          top: 0, bottom: 0, width: 2, background: "#fff",
+          boxShadow: "0 0 4px rgba(255,255,255,0.5)",
+        }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>0초</span>
+        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>{Math.round(duration)}초</span>
+      </div>
     </div>
   );
 }

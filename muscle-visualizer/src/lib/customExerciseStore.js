@@ -32,13 +32,12 @@ export function saveExercise(key, data) {
 export function deleteExercise(key) {
   const customs = getCustomExercises();
   if (customs[key]) {
-    delete customs[key];
-    localStorage.setItem(CUSTOM_KEY, JSON.stringify(customs));
+    const { [key]: _, ...rest } = customs;
+    localStorage.setItem(CUSTOM_KEY, JSON.stringify(rest));
   }
   const deleted = getDeletedExercises();
   if (!deleted.includes(key)) {
-    deleted.push(key);
-    localStorage.setItem(DELETED_KEY, JSON.stringify(deleted));
+    localStorage.setItem(DELETED_KEY, JSON.stringify([...deleted, key]));
   }
 }
 
@@ -58,15 +57,40 @@ export function exportAllData() {
   };
 }
 
-/** JSON 데이터 가져오기 */
+/** 운동 데이터 객체 검증 — 각 값이 name/primary/secondary 구조인지 확인 */
+function isValidExerciseMap(obj) {
+  if (typeof obj !== "object" || obj === null || Array.isArray(obj)) return false;
+  for (const val of Object.values(obj)) {
+    if (typeof val !== "object" || val === null || Array.isArray(val)) return false;
+    if (typeof val.name !== "string") return false;
+  }
+  return true;
+}
+
+/** JSON 데이터 가져오기 — 구조 검증 후 저장 */
 export function importAllData(data) {
-  if (data.customExercises) {
+  if (typeof data !== "object" || data === null) {
+    throw new Error("유효하지 않은 데이터 형식입니다");
+  }
+
+  if (data.customExercises != null) {
+    if (!isValidExerciseMap(data.customExercises)) {
+      throw new Error("customExercises 형식이 올바르지 않습니다");
+    }
     localStorage.setItem(CUSTOM_KEY, JSON.stringify(data.customExercises));
   }
-  if (data.deletedExercises) {
+
+  if (data.deletedExercises != null) {
+    if (!Array.isArray(data.deletedExercises) || !data.deletedExercises.every(k => typeof k === "string")) {
+      throw new Error("deletedExercises 형식이 올바르지 않습니다");
+    }
     localStorage.setItem(DELETED_KEY, JSON.stringify(data.deletedExercises));
   }
-  if (data.learningData) {
+
+  if (data.learningData != null) {
+    if (!Array.isArray(data.learningData)) {
+      throw new Error("learningData 형식이 올바르지 않습니다");
+    }
     localStorage.setItem(LEARNING_KEY, JSON.stringify(data.learningData));
   }
 }

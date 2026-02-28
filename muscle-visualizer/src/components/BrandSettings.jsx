@@ -1,4 +1,11 @@
-const COLOR_PRESETS = ["#3B82F6", "#00E5FF", "#7C4DFF", "#00E676", "#FF6B35", "#FFD700"];
+const COLOR_PRESETS = [
+  { hex: "#3B82F6", name: "블루" },
+  { hex: "#00E5FF", name: "시안" },
+  { hex: "#7C4DFF", name: "퍼플" },
+  { hex: "#00E676", name: "그린" },
+  { hex: "#FF6B35", name: "오렌지" },
+  { hex: "#FFD700", name: "골드" },
+];
 
 export default function BrandSettings({ brand, setBrand }) {
   const update = (key, value) => setBrand((prev) => ({ ...prev, [key]: value }));
@@ -53,14 +60,16 @@ export default function BrandSettings({ brand, setBrand }) {
           브랜드 컬러
         </label>
         <div style={{ display: "flex", gap: 7 }}>
-          {COLOR_PRESETS.map((color) => (
+          {COLOR_PRESETS.map(({ hex, name }) => (
             <button
-              key={color}
-              onClick={() => update("brandColor", color)}
+              key={hex}
+              aria-label={`컬러 선택: ${name}`}
+              aria-pressed={brand.brandColor === hex}
+              onClick={() => update("brandColor", hex)}
               style={{
                 width: 26, height: 26, borderRadius: "50%", border: "none", cursor: "pointer",
-                background: color,
-                outline: brand.brandColor === color ? "2px solid #fff" : "2px solid transparent",
+                background: hex,
+                outline: brand.brandColor === hex ? "2px solid #fff" : "2px solid transparent",
                 outlineOffset: 2, transition: "outline 0.15s ease",
               }}
             />

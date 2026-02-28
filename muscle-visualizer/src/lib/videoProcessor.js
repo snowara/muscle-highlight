@@ -62,23 +62,18 @@ export async function renderVideoOffline(
   });
 }
 
-async function _processFrames(video, exerciseKey, overlayOptions, onProgress, onExerciseDetected) {
-  // 해상도 제한
-  let w = video.videoWidth;
-  let h = video.videoHeight;
-  if (Math.max(w, h) > MAX_RENDER_SIZE) {
-    const scale = MAX_RENDER_SIZE / Math.max(w, h);
-    w = Math.round(w * scale);
-    h = Math.round(h * scale);
-  }
+const CAPTURE_FPS = 30;
+const RENDER_FPS = 24;
+const VIDEO_BITRATE = 4_000_000;
+const ANALYZE_EVERY_N = 3;
+const AUTO_DETECT_FRAME_LIMIT = 30;
+const AUTO_DETECT_CONFIDENCE_MIN = 30;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-
-  // MediaRecorder 설정
-  const stream = canvas.captureStream(30);
+/**
+ * MediaRecorder를 설정하고 녹화 완료 Promise를 반환한다.
+ */
+function setupMediaRecorder(canvas) {
+  const stream = canvas.captureStream(CAPTURE_FPS);
   const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
     ? "video/webm;codecs=vp9"
     : MediaRecorder.isTypeSupported("video/webm")
@@ -94,7 +89,7 @@ async function _processFrames(video, exerciseKey, overlayOptions, onProgress, on
 
   const recorder = new MediaRecorder(stream, {
     mimeType,
-    videoBitsPerSecond: 4_000_000,
+    videoBitsPerSecond: VIDEO_BITRATE,
   });
   const chunks = [];
   recorder.ondataavailable = (e) => {
@@ -102,66 +97,94 @@ async function _processFrames(video, exerciseKey, overlayOptions, onProgress, on
   };
 
   const recordingDone = new Promise((resolve, reject) => {
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: mimeType });
-      resolve(blob);
-    };
+    recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
     recorder.onerror = (e) => reject(e);
   });
 
-  // 프레임 처리
-  const duration = video.duration;
-  const fps = 24;
-  const totalFrames = Math.floor(duration * fps);
-  const frameInterval = 1 / fps;
-  const analyzeEveryN = 3;
+  return { recorder, recordingDone };
+}
 
-  recorder.start();
+/**
+ * 단일 프레임에서 포즈 감지 + 운동 분류 + 자세 분석을 수행한다.
+ */
+async function analyzeFrame(canvas, frameIndex, exerciseKey, state) {
+  try {
+    const result = await detectPose(canvas);
+    const newLandmarks = result.landmarks;
 
-  let landmarks = null;
-  let currentExercise = exerciseKey === "auto" ? "squat" : exerciseKey;
-  let exerciseAutoDetected = false;
-  let muscleStatus = {};
+    let { currentExercise, exerciseAutoDetected, muscleStatus } = state;
 
-  for (let i = 0; i < totalFrames; i++) {
-    const time = i * frameInterval;
-
-    await _seekTo(video, time);
-    ctx.drawImage(video, 0, 0, w, h);
-
-    if (i % analyzeEveryN === 0) {
-      try {
-        const result = await detectPose(canvas);
-        landmarks = result.landmarks;
-
-        if (exerciseKey === "auto" && !result.isFallback && !exerciseAutoDetected && i < 30) {
-          const detected = classifyExercise(landmarks);
-          if (detected.confidence > 30) {
-            currentExercise = detected.key;
-            exerciseAutoDetected = true;
-            onExerciseDetected?.(detected);
-          }
-        }
-
-        // 자세 분석으로 근육별 상태 업데이트
-        if (!result.isFallback) {
-          const analysis = analyzePose(landmarks, currentExercise);
-          muscleStatus = analysis.muscleStatus;
-        }
-      } catch {
-        // 이전 랜드마크 유지
+    if (exerciseKey === "auto" && !result.isFallback && !exerciseAutoDetected && frameIndex < AUTO_DETECT_FRAME_LIMIT) {
+      const detected = classifyExercise(newLandmarks);
+      if (detected.confidence > AUTO_DETECT_CONFIDENCE_MIN) {
+        currentExercise = detected.key;
+        exerciseAutoDetected = true;
+        return { landmarks: newLandmarks, currentExercise, exerciseAutoDetected, muscleStatus, detected };
       }
     }
 
-    if (landmarks) {
-      renderMuscleOverlayLite(ctx, landmarks, currentExercise, w, h, {
+    if (!result.isFallback) {
+      const analysis = analyzePose(newLandmarks, currentExercise);
+      muscleStatus = analysis.muscleStatus;
+    }
+
+    return { landmarks: newLandmarks, currentExercise, exerciseAutoDetected, muscleStatus, detected: null };
+  } catch (err) {
+    console.warn("[VideoProcessor] 프레임 처리 실패:", err);
+    return null;
+  }
+}
+
+async function _processFrames(video, exerciseKey, overlayOptions, onProgress, onExerciseDetected) {
+  let w = video.videoWidth;
+  let h = video.videoHeight;
+  if (Math.max(w, h) > MAX_RENDER_SIZE) {
+    const scale = MAX_RENDER_SIZE / Math.max(w, h);
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+
+  const { recorder, recordingDone } = setupMediaRecorder(canvas);
+
+  const totalFrames = Math.floor(video.duration * RENDER_FPS);
+  const frameInterval = 1 / RENDER_FPS;
+
+  recorder.start();
+
+  let state = {
+    landmarks: null,
+    currentExercise: exerciseKey === "auto" ? "squat" : exerciseKey,
+    exerciseAutoDetected: false,
+    muscleStatus: {},
+  };
+
+  for (let i = 0; i < totalFrames; i++) {
+    const time = i * frameInterval;
+    await _seekTo(video, time);
+    ctx.drawImage(video, 0, 0, w, h);
+
+    if (i % ANALYZE_EVERY_N === 0) {
+      const result = await analyzeFrame(canvas, i, exerciseKey, state);
+      if (result) {
+        state = { ...state, ...result };
+        if (result.detected) onExerciseDetected?.(result.detected);
+      }
+    }
+
+    if (state.landmarks) {
+      renderMuscleOverlayLite(ctx, state.landmarks, state.currentExercise, w, h, {
         ...overlayOptions,
         time,
-        muscleStatus,
+        muscleStatus: state.muscleStatus,
       });
     }
 
-    await new Promise((r) => setTimeout(r, 1000 / fps));
+    await new Promise((r) => setTimeout(r, 1000 / RENDER_FPS));
     onProgress?.(Math.round(((i + 1) / totalFrames) * 100));
   }
 

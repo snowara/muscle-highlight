@@ -38,6 +38,8 @@ export default function ExerciseSelector({ selected, onSelect, autoDetected }) {
 
       {/* Current selection dropdown trigger */}
       <button
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
         onClick={() => setIsOpen(!isOpen)}
         style={{
           width: "100%", padding: "10px 14px", borderRadius: 10,
@@ -84,12 +86,14 @@ export default function ExerciseSelector({ selected, onSelect, autoDetected }) {
           </div>
 
           {/* Exercise list */}
-          <div style={{ padding: 6, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+          <div role="listbox" aria-label="운동 선택" style={{ padding: 6, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
             {filtered.map(([key, ex]) => {
               const isActive = key === selected;
               return (
                 <button
                   key={key}
+                  role="option"
+                  aria-selected={isActive}
                   onClick={() => { onSelect(key); setIsOpen(false); }}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,

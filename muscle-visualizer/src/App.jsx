@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useReducer, useRef, useEffect, useCallback } from "react";
 import UploadArea from "./components/UploadArea";
 import CanvasView from "./components/CanvasView";
 import VideoPlayer from "./components/VideoPlayer";
@@ -8,7 +8,6 @@ import CorrectionPanel from "./components/CorrectionPanel";
 import MuscleInfo from "./components/MuscleInfo";
 import AnatomicalDiagram from "./components/AnatomicalDiagram";
 import ControlPanel from "./components/ControlPanel";
-// BrandSettings removed
 import Toast from "./components/Toast";
 import AdminPanel from "./components/AdminPanel";
 import { initPoseDetector, prepareImage, detectPose } from "./lib/poseDetector";
@@ -21,98 +20,175 @@ import {
 import { recordCorrection } from "./lib/learningStore";
 import { EXERCISE_DB } from "./data/exercises";
 
-export default function App() {
-  const [appState, setAppState] = useState("upload"); // "upload" | "photo" | "video"
-  const [mediaType, setMediaType] = useState(null); // "photo" | "video"
+// -- State --
 
-  // Photo state
-  const [image, setImage] = useState(null);
-  const [canvasSize, setCanvasSize] = useState({ w: 600, h: 800 });
-  const [landmarks, setLandmarks] = useState(null);
-
-  // Video state
-  const [videoFile, setVideoFile] = useState(null);
-  const [worstFrame, setWorstFrame] = useState(null);
-
-  // Shared state
-  const [selectedExercise, setSelectedExercise] = useState("squat");
-  const [autoDetected, setAutoDetected] = useState(null);
-  const [analysis, setAnalysis] = useState(null);
-  const [glowIntensity, setGlowIntensity] = useState(0.7);
-  const [showSkeleton, setShowSkeleton] = useState(false);
-  const [showLabels, setShowLabels] = useState(true);
-  const [showCorrections, setShowCorrections] = useState(true);
-  const [mediapipeStatus, setMediapipeStatus] = useState("loading");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [toast, setToast] = useState("");
-  const [mobileTab, setMobileTab] = useState(0);
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [brand, setBrand] = useState({
+const initialState = {
+  appState: "upload",
+  mediaType: null,
+  image: null,
+  canvasSize: { w: 600, h: 800 },
+  landmarks: null,
+  videoFile: null,
+  worstFrame: null,
+  selectedExercise: "squat",
+  autoDetected: null,
+  analysis: null,
+  glowIntensity: 0.7,
+  showSkeleton: false,
+  showLabels: true,
+  showCorrections: true,
+  mediapipeStatus: "loading",
+  isAnalyzing: false,
+  toast: "",
+  mobileTab: 0,
+  showAdmin: false,
+  brand: {
     gymName: "MY GYM",
     tagline: "Transform Your Body",
     brandColor: "#3B82F6",
-  });
+  },
+};
 
+function appReducer(state, action) {
+  switch (action.type) {
+    case "SET_MEDIAPIPE_STATUS":
+      return { ...state, mediapipeStatus: action.value };
+    case "START_PHOTO_ANALYSIS":
+      return { ...state, isAnalyzing: true, mediaType: "photo" };
+    case "PHOTO_ANALYSIS_SUCCESS":
+      return {
+        ...state,
+        image: action.image,
+        canvasSize: action.canvasSize,
+        landmarks: action.landmarks,
+        autoDetected: action.autoDetected,
+        selectedExercise: action.selectedExercise,
+        analysis: action.analysis,
+        isAnalyzing: false,
+        appState: "photo",
+      };
+    case "PHOTO_ANALYSIS_FAIL":
+      return { ...state, isAnalyzing: false, toast: "사진 분석에 실패했습니다" };
+    case "START_VIDEO":
+      return {
+        ...state,
+        mediaType: "video",
+        videoFile: action.videoFile,
+        selectedExercise: "auto",
+        appState: "video",
+      };
+    case "SET_SELECTED_EXERCISE":
+      return { ...state, selectedExercise: action.value };
+    case "SET_AUTO_DETECTED":
+      return {
+        ...state,
+        autoDetected: action.value,
+        selectedExercise: action.value.key,
+      };
+    case "SET_ANALYSIS":
+      return { ...state, analysis: action.value };
+    case "SET_GLOW_INTENSITY":
+      return { ...state, glowIntensity: action.value };
+    case "SET_SHOW_SKELETON":
+      return { ...state, showSkeleton: action.value };
+    case "SET_SHOW_LABELS":
+      return { ...state, showLabels: action.value };
+    case "SET_SHOW_CORRECTIONS":
+      return { ...state, showCorrections: action.value };
+    case "SET_TOAST":
+      return { ...state, toast: action.value };
+    case "SET_MOBILE_TAB":
+      return { ...state, mobileTab: action.value };
+    case "SET_SHOW_ADMIN":
+      return { ...state, showAdmin: action.value };
+    case "SET_WORST_FRAME":
+      return { ...state, worstFrame: action.value };
+    case "RESET":
+      return {
+        ...state,
+        appState: "upload",
+        image: null,
+        landmarks: null,
+        videoFile: null,
+        worstFrame: null,
+        autoDetected: null,
+        analysis: null,
+        mediaType: null,
+      };
+    default:
+      return state;
+  }
+}
+
+// -- App --
+
+export default function App() {
+  const [state, dispatch] = useReducer(appReducer, initialState);
   const canvasRef = useRef(null);
 
+  const {
+    appState, mediaType, image, canvasSize, landmarks,
+    videoFile, worstFrame, selectedExercise, autoDetected,
+    analysis, glowIntensity, showSkeleton, showLabels,
+    showCorrections, mediapipeStatus, isAnalyzing, toast,
+    mobileTab, showAdmin, brand,
+  } = state;
+
   useEffect(() => {
-    initPoseDetector(setMediapipeStatus);
+    initPoseDetector((status) => dispatch({ type: "SET_MEDIAPIPE_STATUS", value: status }));
   }, []);
 
-  // ── File upload handler ──
-  async function handleFileSelect(file, type) {
+  // -- File upload handler --
+  const handleFileSelect = useCallback(async (file, type) => {
     if (type === "photo") {
-      setIsAnalyzing(true);
-      setMediaType("photo");
-
+      dispatch({ type: "START_PHOTO_ANALYSIS" });
       try {
-        // prepareImage: EXIF 보정 + 800px 리사이즈 + Canvas 반환
         const { canvas, width, height } = await prepareImage(file);
-        setImage(canvas); // canvas can be used as drawImage source
-        setCanvasSize({ w: width, h: height });
-
         const result = await detectPose(canvas);
-        setLandmarks(result.landmarks);
+
+        let detectedExercise = null;
+        let exerciseKey = "squat";
+        let poseAnalysis = null;
 
         if (!result.isFallback) {
-          const detected = classifyExercise(result.landmarks);
-          setAutoDetected(detected);
-          setSelectedExercise(detected.key);
-
-          const poseAnalysis = analyzePose(result.landmarks, detected.key);
-          setAnalysis(poseAnalysis);
+          detectedExercise = classifyExercise(result.landmarks);
+          exerciseKey = detectedExercise.key;
+          poseAnalysis = analyzePose(result.landmarks, exerciseKey);
         }
 
-        setIsAnalyzing(false);
-        setAppState("photo");
+        dispatch({
+          type: "PHOTO_ANALYSIS_SUCCESS",
+          image: canvas,
+          canvasSize: { w: width, h: height },
+          landmarks: result.landmarks,
+          autoDetected: detectedExercise,
+          selectedExercise: exerciseKey,
+          analysis: poseAnalysis,
+        });
       } catch (e) {
         console.error("[App] Photo analysis failed:", e);
-        setIsAnalyzing(false);
-        setToast("사진 분석에 실패했습니다");
+        dispatch({ type: "PHOTO_ANALYSIS_FAIL" });
       }
     } else {
-      setMediaType("video");
-      setVideoFile(file);
-      setSelectedExercise("auto");
-      setAppState("video");
+      dispatch({ type: "START_VIDEO", videoFile: file });
     }
-  }
+  }, []);
 
-  // ── Exercise change ──
-  function handleExerciseSelect(key) {
+  // -- Exercise change --
+  const handleExerciseSelect = useCallback((key) => {
     if (autoDetected && key !== autoDetected.key && landmarks) {
       recordCorrection(landmarks, key, autoDetected.key);
     }
-    setSelectedExercise(key);
+    dispatch({ type: "SET_SELECTED_EXERCISE", value: key });
 
     if (landmarks && key !== "auto") {
       const newAnalysis = analyzePose(landmarks, key);
-      setAnalysis(newAnalysis);
+      dispatch({ type: "SET_ANALYSIS", value: newAnalysis });
     }
-  }
+  }, [autoDetected, landmarks]);
 
-  // ── Export functions ──
-  function handleDownload() {
+  // -- Export functions --
+  const handleDownload = useCallback(() => {
     if (!canvasRef.current || !image || !landmarks) return;
     const exerciseKey = selectedExercise === "auto" ? "squat" : selectedExercise;
     const composite = createCompositeCanvas(
@@ -121,10 +197,10 @@ export default function App() {
       brand, analysis
     );
     downloadImage(composite, brand.gymName, EXERCISE_DB[exerciseKey].name);
-    setToast("다운로드 완료!");
-  }
+    dispatch({ type: "SET_TOAST", value: "다운로드 완료!" });
+  }, [image, landmarks, selectedExercise, glowIntensity, showSkeleton, showLabels, analysis, brand]);
 
-  async function handleCopy() {
+  const handleCopy = useCallback(async () => {
     if (!canvasRef.current || !image || !landmarks) return;
     const exerciseKey = selectedExercise === "auto" ? "squat" : selectedExercise;
     const composite = createCompositeCanvas(
@@ -134,26 +210,19 @@ export default function App() {
     );
     const ok = await copyToClipboard(composite);
     if (ok) {
-      setToast("클립보드에 복사됨!");
+      dispatch({ type: "SET_TOAST", value: "클립보드에 복사됨!" });
     } else {
       downloadImage(composite, brand.gymName, EXERCISE_DB[exerciseKey].name);
-      setToast("클립보드 불가 — 다운로드됨");
+      dispatch({ type: "SET_TOAST", value: "클립보드 불가 — 다운로드됨" });
     }
-  }
+  }, [image, landmarks, selectedExercise, glowIntensity, showSkeleton, showLabels, analysis, brand]);
 
-  function handleReset() {
-    setAppState("upload");
-    setImage(null);
-    setLandmarks(null);
-    setVideoFile(null);
-    setWorstFrame(null);
-    setAutoDetected(null);
-    setAnalysis(null);
-    setMediaType(null);
-  }
+  const handleReset = useCallback(() => {
+    dispatch({ type: "RESET" });
+  }, []);
 
-  // ── Video worst frame download ──
-  function handleWorstFrameDownload() {
+  // -- Video worst frame download --
+  const handleWorstFrameDownload = useCallback(() => {
     if (!worstFrame) return;
     const exerciseKey = selectedExercise === "auto" ? (autoDetected?.key || "squat") : selectedExercise;
     const composite = createWorstFrameComposite(
@@ -162,24 +231,29 @@ export default function App() {
       brand, analysis
     );
     downloadImage(composite, brand.gymName, EXERCISE_DB[exerciseKey]?.name || "exercise");
-    setToast("최저 점수 프레임 다운로드 완료!");
-  }
+    dispatch({ type: "SET_TOAST", value: "최저 점수 프레임 다운로드 완료!" });
+  }, [worstFrame, selectedExercise, autoDetected, glowIntensity, showSkeleton, showLabels, analysis, brand]);
+
+  const handleAdminClose = useCallback(() => {
+    dispatch({ type: "SET_SHOW_ADMIN", value: false });
+    dispatch({ type: "RESET" });
+  }, []);
 
   const effectiveExerciseKey = selectedExercise === "auto" ? (autoDetected?.key || "squat") : selectedExercise;
 
-  // ═══════════════════════════════════════════════
+  // ========================
   //  UPLOAD SCREEN
-  // ═══════════════════════════════════════════════
+  // ========================
   if (appState === "upload") {
     return (
       <div style={S.container}>
-        <Toast message={toast} onClose={() => setToast("")} />
+        <Toast message={toast} onClose={() => dispatch({ type: "SET_TOAST", value: "" })} />
         <div style={{
           display: "flex", flexDirection: "column", alignItems: "center",
           justifyContent: "center", minHeight: "100vh", padding: 20,
         }}>
           <h1 style={{ fontSize: 28, fontWeight: 800, color: "#fff", marginBottom: 4 }}>
-            💪 Muscle Highlight
+            Muscle Highlight
           </h1>
           <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 36 }}>
             AI가 운동 자세를 분석하고 근육을 시각화합니다
@@ -218,7 +292,7 @@ export default function App() {
 
           {/* 관리자 설정 버튼 */}
           <button
-            onClick={() => setShowAdmin(true)}
+            onClick={() => dispatch({ type: "SET_SHOW_ADMIN", value: true })}
             style={{
               marginTop: 16, padding: "8px 16px", borderRadius: 8,
               background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
@@ -229,14 +303,14 @@ export default function App() {
           </button>
         </div>
 
-        {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); window.location.reload(); }} />}
+        {showAdmin && <AdminPanel onClose={handleAdminClose} />}
       </div>
     );
   }
 
-  // ═══════════════════════════════════════════════
-  //  SIDE PANEL CONTENT (shared between photo/video)
-  // ═══════════════════════════════════════════════
+  // ========================
+  //  SIDE PANEL CONTENT
+  // ========================
   const sideContent = {
     analysis: (
       <>
@@ -261,14 +335,14 @@ export default function App() {
         />
         <div style={S.divider} />
         <ControlPanel
-          glowIntensity={glowIntensity} setGlowIntensity={setGlowIntensity}
-          showSkeleton={showSkeleton} setShowSkeleton={setShowSkeleton}
-          showLabels={showLabels} setShowLabels={setShowLabels}
-          showCorrections={showCorrections} setShowCorrections={setShowCorrections}
+          glowIntensity={glowIntensity} setGlowIntensity={(v) => dispatch({ type: "SET_GLOW_INTENSITY", value: v })}
+          showSkeleton={showSkeleton} setShowSkeleton={(v) => dispatch({ type: "SET_SHOW_SKELETON", value: v })}
+          showLabels={showLabels} setShowLabels={(v) => dispatch({ type: "SET_SHOW_LABELS", value: v })}
+          showCorrections={showCorrections} setShowCorrections={(v) => dispatch({ type: "SET_SHOW_CORRECTIONS", value: v })}
         />
         <div style={S.divider} />
         <button
-          onClick={() => setShowAdmin(true)}
+          onClick={() => dispatch({ type: "SET_SHOW_ADMIN", value: true })}
           style={{
             width: "100%", padding: "10px", borderRadius: 8,
             background: "rgba(232,64,64,0.08)", border: "1px solid rgba(232,64,64,0.2)",
@@ -281,12 +355,12 @@ export default function App() {
     ),
   };
 
-  // ═══════════════════════════════════════════════
-  //  RESULT SCREEN (photo or video)
-  // ═══════════════════════════════════════════════
+  // ========================
+  //  RESULT SCREEN
+  // ========================
   return (
     <div style={S.container}>
-      <Toast message={toast} onClose={() => setToast("")} />
+      <Toast message={toast} onClose={() => dispatch({ type: "SET_TOAST", value: "" })} />
 
       <div className="result-layout">
         {/* Main area - Canvas or Video */}
@@ -311,12 +385,9 @@ export default function App() {
               showSkeleton={showSkeleton}
               showLabels={showLabels}
               showCorrections={showCorrections}
-              onExerciseDetected={(d) => {
-                setAutoDetected(d);
-                setSelectedExercise(d.key);
-              }}
-              onAnalysisUpdate={(a) => setAnalysis(a)}
-              onWorstFrame={(wf) => setWorstFrame(wf)}
+              onExerciseDetected={(d) => dispatch({ type: "SET_AUTO_DETECTED", value: d })}
+              onAnalysisUpdate={(a) => dispatch({ type: "SET_ANALYSIS", value: a })}
+              onWorstFrame={(wf) => dispatch({ type: "SET_WORST_FRAME", value: wf })}
             />
           )}
 
@@ -349,7 +420,7 @@ export default function App() {
             ].map((tab, i) => (
               <button
                 key={i}
-                onClick={() => setMobileTab(i)}
+                onClick={() => dispatch({ type: "SET_MOBILE_TAB", value: i })}
                 style={{
                   flex: 1, padding: "12px 0", border: "none", cursor: "pointer",
                   background: mobileTab === i ? "rgba(59,130,246,0.1)" : "transparent",
@@ -367,7 +438,6 @@ export default function App() {
           <div className="mobile-tab-content" style={{
             display: "flex", flexDirection: "column", gap: 12, padding: "12px 0",
           }}>
-            {/* On desktop, show all. On mobile, show selected tab */}
             <div className="desktop-only-all" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <Panel>{sideContent.analysis}</Panel>
               <Panel>{sideContent.muscles}</Panel>
@@ -388,7 +458,7 @@ export default function App() {
         </div>
       </div>
 
-      {showAdmin && <AdminPanel onClose={() => { setShowAdmin(false); window.location.reload(); }} />}
+      {showAdmin && <AdminPanel onClose={handleAdminClose} />}
 
       {/* Mobile fixed bottom actions */}
       <div className="bottom-actions-mobile" style={{

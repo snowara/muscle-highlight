@@ -1,7 +1,11 @@
 function Toggle({ label, value, onChange }) {
   return (
     <div
+      role="switch"
+      aria-checked={value}
+      tabIndex={0}
       onClick={() => onChange(!value)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onChange(!value); } }}
       style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "8px 10px", borderRadius: 8, cursor: "pointer",
@@ -51,6 +55,7 @@ export default function ControlPanel({
         </div>
         <input
           type="range"
+          aria-label="글로우 강도 조절"
           min={0}
           max={100}
           value={Math.round(glowIntensity * 100)}

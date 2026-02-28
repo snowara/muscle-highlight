@@ -63,7 +63,7 @@ export function createCompositeCanvas(sourceCanvas, image, landmarks, exerciseKe
   return compositeCanvas;
 }
 
-export async function downloadImage(compositeCanvas, gymName, exerciseName) {
+export function downloadImage(compositeCanvas, gymName, exerciseName) {
   const safeName = gymName.replace(/[^a-zA-Z0-9가-힣]/g, "_");
   const safeExercise = exerciseName.replace(/[^a-zA-Z0-9가-힣]/g, "_");
   const filename = `${safeName}_${safeExercise}_muscle.png`;

@@ -28,17 +28,29 @@ function getMergedExercise(exerciseKey) {
   return base;
 }
 
+/** 허용된 근육 키 목록 (MUSCLE_REGIONS 기반) */
+const VALID_MUSCLE_KEYS = new Set(Object.keys(MUSCLE_REGIONS));
+
+/** 근육 키가 유효한지 확인 (base key 또는 base_left/base_right) */
+function isValidMuscleKey(key) {
+  const base = key.replace(/_left$|_right$/, "");
+  return VALID_MUSCLE_KEYS.has(base);
+}
+
 /**
  * Expand base muscle keys to include side-specific keys if present.
  * e.g., { chest: 80 } → activeMuscles has "chest" for both sides.
  *       { chest_left: 80, chest_right: 40 } → side-specific.
+ * 허용 목록에 없는 키는 무시 (localStorage 오염 방어).
  */
 function buildActiveMuscles(primary, secondary, muscleStatus) {
   const result = {};
   for (const [key, val] of Object.entries(primary)) {
+    if (!isValidMuscleKey(key)) continue;
     result[key] = { level: "primary", status: muscleStatus[key.replace(/_left|_right/, "")] || "good" };
   }
   for (const [key, val] of Object.entries(secondary)) {
+    if (!isValidMuscleKey(key)) continue;
     if (!result[key]) {
       result[key] = { level: "secondary", status: muscleStatus[key.replace(/_left|_right/, "")] || "good" };
     }
@@ -243,12 +255,12 @@ export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewPro
   const availableMuscles = view === "back" ? BACK_MUSCLE_KEYS : FRONT_MUSCLE_KEYS;
 
   return (
-    <div style={{ background: "#060610", borderRadius: 12, padding: 16, ...style }}>
+    <div style={{ background: "#ffffff", borderRadius: 12, padding: 16, ...style }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 18 }}>{exercise.icon}</span>
-          <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>{exercise.name}</span>
+          <span style={{ color: "#1a1a1a", fontSize: 13, fontWeight: 700 }}>{exercise.name}</span>
         </div>
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <ToggleBtn label={editMode ? "편집중" : "편집"} active={editMode} accent={editMode} onClick={() => setEditMode(!editMode)} />
@@ -262,7 +274,7 @@ export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewPro
         <div style={{
           background: "rgba(232,48,48,0.08)", border: "1px solid rgba(232,48,48,0.3)",
           borderRadius: 8, padding: "8px 12px", marginBottom: 10,
-          fontSize: 11, color: "rgba(255,255,255,0.7)", lineHeight: 1.6,
+          fontSize: 11, color: "rgba(0,0,0,0.6)", lineHeight: 1.6,
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
@@ -279,7 +291,7 @@ export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewPro
             />
           </div>
           {sideEdit && (
-            <div style={{ marginTop: 4, fontSize: 10, color: "rgba(255,200,100,0.7)" }}>
+            <div style={{ marginTop: 4, fontSize: 10, color: "rgba(180,120,20,0.8)" }}>
               왼쪽/오른쪽 근육을 개별적으로 설정할 수 있습니다
             </div>
           )}
@@ -297,7 +309,7 @@ export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewPro
       {/* 편집 모드: 빠른 선택 */}
       {editMode && (
         <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginBottom: 6, fontWeight: 600 }}>
+          <div style={{ fontSize: 10, color: "rgba(0,0,0,0.4)", marginBottom: 6, fontWeight: 600 }}>
             {view === "front" ? "앞면" : "뒷면"} 근육 {sideEdit ? "좌/우 선택" : "선택"}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -313,7 +325,7 @@ export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewPro
                 const rState = getState(editPrimary, editSecondary, rKey);
                 return (
                   <div key={baseKey} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", width: 50, flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, color: "rgba(0,0,0,0.5)", width: 50, flexShrink: 0 }}>
                       {region.simpleLabel}
                     </span>
                     <MuscleChip label="좌" state={lState} onClick={() => {
@@ -352,8 +364,8 @@ export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewPro
               background: "#E83030", color: "#fff", fontSize: 12, fontWeight: 700,
             }}>저장</button>
             <button onClick={handleReset} style={{
-              padding: "6px 16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)",
-              cursor: "pointer", background: "transparent", color: "rgba(255,255,255,0.5)", fontSize: 12,
+              padding: "6px 16px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.15)",
+              cursor: "pointer", background: "transparent", color: "rgba(0,0,0,0.5)", fontSize: 12,
             }}>원본 복원</button>
             {savedMsg && (
               <span style={{ color: "#4CAF50", fontSize: 11, fontWeight: 600 }}>{savedMsg}</span>
@@ -366,7 +378,7 @@ export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewPro
       <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
         {legendPrimary.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 600, marginRight: 2 }}>주동근</span>
+            <span style={{ fontSize: 10, color: "rgba(0,0,0,0.4)", fontWeight: 600, marginRight: 2 }}>주동근</span>
             {legendPrimary.map((m) => (
               <LegendDot key={m.label} label={m.label} color="#E83030" glow="#FF2020" opacity={0.8} />
             ))}
@@ -374,7 +386,7 @@ export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewPro
         )}
         {legendSecondary.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 600, marginRight: 2 }}>보조근</span>
+            <span style={{ fontSize: 10, color: "rgba(0,0,0,0.4)", fontWeight: 600, marginRight: 2 }}>보조근</span>
             {legendSecondary.map((m) => (
               <LegendDot key={m.label} label={m.label} color="#C83030" glow="#FF4040" opacity={0.6} />
             ))}
@@ -413,7 +425,7 @@ function LegendDot({ label, color, glow, opacity }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
       <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 6px ${glow}` }} />
-      <span style={{ color: `rgba(255,255,255,${opacity})`, fontSize: 11 }}>{label}</span>
+      <span style={{ color: `rgba(0,0,0,${opacity})`, fontSize: 11 }}>{label}</span>
     </div>
   );
 }
@@ -422,19 +434,19 @@ function ToggleBtn({ label, active, accent, onClick }) {
   return (
     <button onClick={onClick} style={{
       padding: "4px 10px", borderRadius: 12, border: "none", cursor: "pointer",
-      background: active ? accent ? "rgba(255,180,30,0.15)" : "rgba(232,48,48,0.15)" : "transparent",
-      color: active ? accent ? "#FFB020" : "#FF5555" : "rgba(255,255,255,0.4)",
+      background: active ? accent ? "rgba(255,180,30,0.12)" : "rgba(232,48,48,0.1)" : "transparent",
+      color: active ? accent ? "#C08000" : "#D02020" : "rgba(0,0,0,0.4)",
       fontSize: 10, fontWeight: active ? 700 : 400,
-      outline: active ? accent ? "1.5px solid rgba(255,180,30,0.6)" : "1.5px solid rgba(232,48,48,0.6)" : "1px solid rgba(255,255,255,0.1)",
+      outline: active ? accent ? "1.5px solid rgba(200,140,20,0.6)" : "1.5px solid rgba(232,48,48,0.5)" : "1px solid rgba(0,0,0,0.12)",
       transition: "all 0.15s ease",
     }}>{label}</button>
   );
 }
 
 function MuscleChip({ label, state, onClick, wide }) {
-  const bg = state === "primary" ? "rgba(255,48,48,0.2)" : state === "secondary" ? "rgba(208,48,48,0.15)" : "rgba(255,255,255,0.05)";
-  const border = state === "primary" ? "1px solid rgba(255,48,48,0.5)" : state === "secondary" ? "1px solid rgba(208,48,48,0.4)" : "1px solid rgba(255,255,255,0.1)";
-  const color = state === "primary" ? "#FF5555" : state === "secondary" ? "#D06060" : "rgba(255,255,255,0.4)";
+  const bg = state === "primary" ? "rgba(232,48,48,0.1)" : state === "secondary" ? "rgba(208,48,48,0.08)" : "rgba(0,0,0,0.03)";
+  const border = state === "primary" ? "1px solid rgba(232,48,48,0.4)" : state === "secondary" ? "1px solid rgba(208,48,48,0.3)" : "1px solid rgba(0,0,0,0.1)";
+  const color = state === "primary" ? "#D02020" : state === "secondary" ? "#B04040" : "rgba(0,0,0,0.4)";
   const tag = state === "primary" ? " ●주" : state === "secondary" ? " ◐보" : "";
 
   return (
