@@ -12,6 +12,7 @@ import Toast from "./components/Toast";
 import AdminPanel from "./components/AdminPanel";
 import { initPoseDetector, prepareImage, detectPose } from "./lib/poseDetector";
 import { classifyExercise } from "./lib/exerciseClassifier";
+import { loadMLModel } from "./lib/mlClassifier";
 import { analyzePose } from "./lib/poseAnalyzer";
 import {
   createCompositeCanvas, downloadImage, copyToClipboard,
@@ -139,6 +140,7 @@ export default function App() {
 
   useEffect(() => {
     initPoseDetector((status) => dispatch({ type: "SET_MEDIAPIPE_STATUS", value: status }));
+    loadMLModel();
   }, []);
 
   // -- File upload handler --
@@ -169,8 +171,7 @@ export default function App() {
           analysis: poseAnalysis,
           isFallback: result.isFallback,
         });
-      } catch (e) {
-        console.error("[App] Photo analysis failed:", e);
+      } catch {
         dispatch({ type: "PHOTO_ANALYSIS_FAIL" });
       }
     } else {

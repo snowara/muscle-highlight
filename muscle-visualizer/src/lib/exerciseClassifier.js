@@ -13,6 +13,7 @@
 
 import { getLearnedBoosts } from "./learningStore";
 import { angleDeg, mid } from "./poseUtils";
+import { isModelReady, predictExercise } from "./mlClassifier";
 
 function dist(a, b) {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
@@ -24,6 +25,16 @@ function avg(...vals) {
 
 // ── 자세 임계값 상수 ──
 const MIN_LANDMARKS = 29;
+
+/** ML 모델 입력 특징 순서 (단일 소스) */
+export const FEATURE_ORDER = [
+  "knee", "hip", "elbow", "shoulder", "torsoFromVertical",
+  "armElevation", "armSpread", "wristHeightNorm", "stanceWidth",
+  "kneeAsym", "elbowAsym",
+  "isUpright", "isLeaning", "isHorizontal",
+  "wristAboveShoulder", "wristAtShoulder", "wristAtChest",
+  "wristBelowHip", "elbowsPinned", "wristAboveElbow",
+];
 const TORSO_UPRIGHT_MAX = 35;
 const TORSO_LEANING_MAX = 60;
 const WRIST_ABOVE_THRESHOLD = 0.03;
@@ -36,7 +47,7 @@ const MAX_CONFIDENCE = 100;
  * 랜드마크에서 분류에 필요한 포즈 특징을 추출한다.
  * classifyExercise 내부에서 사용하며 관절각도, 체위, 손목위치 등을 포함.
  */
-function extractClassifierFeatures(landmarks) {
+export function extractClassifierFeatures(landmarks) {
   const lm = landmarks;
   const ls = lm[11], rs = lm[12]; // shoulders
   const le = lm[13], re = lm[14]; // elbows
@@ -516,6 +527,8 @@ function selectBestExercise(scores, landmarks) {
   return { key: bestKey, confidence, top3, learned: hasBoost };
 }
 
+const ML_CONFIDENCE_THRESHOLD = 60;
+
 export function classifyExercise(landmarks) {
   if (!landmarks || landmarks.length < MIN_LANDMARKS) {
     return { key: "squat", confidence: 0 };
@@ -523,12 +536,44 @@ export function classifyExercise(landmarks) {
 
   const features = extractClassifierFeatures(landmarks);
 
+  // 하이브리드: ML 모델이 준비되면 ML 우선 사용
+  if (isModelReady()) {
+    const mlResult = predictExercise(features);
+    if (mlResult && mlResult.confidence >= ML_CONFIDENCE_THRESHOLD) {
+      // ML 결과에도 learningStore 부스트 적용
+      const boosts = getLearnedBoosts(landmarks);
+      const hasBoost = Object.keys(boosts).length > 0;
+
+      if (hasBoost && boosts[mlResult.key] !== undefined) {
+        // 부스트가 음수면 다른 운동으로 전환 가능
+        if (boosts[mlResult.key] < -10) {
+          // Fallback to rules
+          return classifyWithRules(features, landmarks);
+        }
+      }
+
+      return {
+        key: mlResult.key,
+        confidence: mlResult.confidence,
+        top3: mlResult.top3,
+        learned: hasBoost,
+        source: "ml",
+      };
+    }
+  }
+
+  // Fallback: 규칙 기반 분류
+  return classifyWithRules(features, landmarks);
+}
+
+function classifyWithRules(features, landmarks) {
   const scores = {};
   for (const [key, scoreFn] of Object.entries(EXERCISE_RULES)) {
     scores[key] = scoreFn(features);
   }
 
-  return selectBestExercise(scores, landmarks);
+  const result = selectBestExercise(scores, landmarks);
+  return { ...result, source: "rules" };
 }
 
 /**

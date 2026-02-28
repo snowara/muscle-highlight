@@ -6,6 +6,7 @@
  */
 
 import { angleDeg, mid } from "./poseUtils";
+import { extractClassifierFeatures, FEATURE_ORDER } from "./exerciseClassifier";
 
 const STORAGE_KEY = "muscle-highlight-learning";
 const MAX_ENTRIES = 500;
@@ -75,9 +76,22 @@ export function recordCorrection(landmarks, correctExercise, aiDetected) {
   const features = extractFeatures(landmarks);
   if (!features) return;
 
+  // ML 재학습용 full 20-feature 벡터도 저장
+  let fullFeatures = null;
+  try {
+    const clf = extractClassifierFeatures(landmarks);
+    fullFeatures = FEATURE_ORDER.map((k) => {
+      const v = clf[k];
+      return typeof v === "boolean" ? (v ? 1 : 0) : Math.round(v * 100) / 100;
+    });
+  } catch {
+    // extractClassifierFeatures 실패 시 null 유지
+  }
+
   const entries = loadEntries();
   entries.push({
     features,
+    fullFeatures,
     correct: correctExercise,
     aiGuess: aiDetected,
     timestamp: Date.now(),
@@ -195,4 +209,19 @@ export function importLearningData(data) {
   if (Array.isArray(data)) {
     saveEntries(data);
   }
+}
+
+/**
+ * ML 재학습용 데이터 export.
+ * fullFeatures가 있는 항목만 반환 (20-feature 벡터 + 라벨).
+ */
+export function exportForTraining() {
+  const entries = loadEntries();
+  return entries
+    .filter((e) => e.fullFeatures && e.fullFeatures.length === 20)
+    .map((e) => ({
+      features: e.fullFeatures,
+      label: e.correct,
+      timestamp: e.timestamp,
+    }));
 }

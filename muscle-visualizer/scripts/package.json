@@ -1,0 +1,14 @@
+{
+  "name": "muscle-highlight-ml-training",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "generate": "node generateData.mjs",
+    "train": "node trainModel.mjs",
+    "evaluate": "node evaluateModel.mjs",
+    "pipeline": "node generateData.mjs && node trainModel.mjs && node evaluateModel.mjs"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-node": "^4.22.0"
+  }
+}
