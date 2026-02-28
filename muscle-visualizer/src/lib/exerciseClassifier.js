@@ -84,6 +84,33 @@ function extractClassifierFeatures(landmarks) {
   const ankleNearHip = Math.abs(avg(la.y, ra.y) - hMid.y) < ANKLE_HIP_THRESHOLD;
   const isStandingBentOver = (isHorizontal || isLeaning) && ankleNearHip;
 
+  // ── 새 특징: 팔 방향 ──
+  // 상완 수직 각도 (0°=팔 내려감, 90°=수평, 180°=머리 위)
+  const armElevationL = Math.atan2(Math.abs(le.x - ls.x), le.y - ls.y) * 180 / Math.PI;
+  const armElevationR = Math.atan2(Math.abs(re.x - rs.x), re.y - rs.y) * 180 / Math.PI;
+  const armElevation = avg(armElevationL, armElevationR);
+
+  // 전완 방향: 손목이 팔꿈치 위인지
+  const wristAboveElbow = lw.y < le.y || rw.y < re.y;
+
+  // 손목 높이 정규화 (0=어깨, 1=골반)
+  const torsoLength = dist(sMid, hMid) || 0.01;
+  const wristHeightNorm = (wristMid.y - sMid.y) / torsoLength;
+
+  // 발벌림 / 골반너비 비율
+  const hipW = dist(lh, rh) || 0.01;
+  const stanceWidth = dist(la, ra) / hipW;
+
+  // 팔이 몸 옆에 있는지
+  const armsAtSides = armElevation < 30 && armSpread < 1.3;
+
+  // 팔꿈치 고정 (컬 시그널: 어깨각 < 30 & 팔 내려감)
+  const elbowsPinned = shoulder < 30 && armElevation < 25;
+
+  // 상/하체 우세 판별
+  const isUpperBodyDominant = (armElevation > 30 || elbow < 120) && knee > 150;
+  const isLowerBodyDominant = (knee < 140 || hip < 130) && armElevation < 40 && elbow > 140;
+
   return {
     knee, kneeL, kneeR, kneeAsym,
     hip, elbow, elbowL, elbowR, elbowAsym,
@@ -91,6 +118,10 @@ function extractClassifierFeatures(landmarks) {
     isUpright, isLeaning, isHorizontal,
     wristAboveShoulder, wristAtShoulder, wristAtChest, wristBelowHip,
     armSpread, isStandingBentOver,
+    armElevation, armElevationL, armElevationR,
+    wristAboveElbow, wristHeightNorm, stanceWidth,
+    armsAtSides, elbowsPinned,
+    isUpperBodyDominant, isLowerBodyDominant,
   };
 }
 
@@ -132,7 +163,11 @@ const EXERCISE_RULES = {
     if (f.hip < 140) score += 10;
     if (f.hip < 110) score += 10;
     if (!f.wristAboveShoulder && !f.wristBelowHip) score += 5;
+    if (f.stanceWidth > 0.8) score += 5;
     if (f.isLeaning) score -= 15;
+    if (f.knee > 160) score -= 15;
+    if (f.elbow < 100) score -= 20;
+    if (f.elbowsPinned && f.elbow < 120) score -= 15;
     return score;
   },
   deadlift: (f) => {
@@ -142,7 +177,9 @@ const EXERCISE_RULES = {
     if (f.knee > 120 && f.knee < 170) score += 15;
     if (f.wristBelowHip) score += 15;
     if (f.elbow > 150) score += 15;
+    if (f.armsAtSides) score += 5;
     if (f.elbow < 120) score -= 15;
+    if (f.isUpright && f.knee > 160) score -= 15;
     return score;
   },
   barbellRow: (f) => {
@@ -154,7 +191,9 @@ const EXERCISE_RULES = {
     if (f.shoulder > 30 && f.shoulder < 90) score += 15;
     if (f.wristAtChest || f.wristBelowHip) score += 10;
     if (f.isStandingBentOver && f.elbow < 130) score += 10;
+    if (f.armElevation < 45) score += 5;
     if (f.elbow > 155) score -= 20;
+    if (f.isUpright && f.knee > 160) score -= 10;
     return score;
   },
   dumbbellRow: (f) => {
@@ -168,6 +207,7 @@ const EXERCISE_RULES = {
     if (f.wristAtChest || f.wristBelowHip) score += 5;
     if (f.isStandingBentOver && f.elbowAsym > 15) score += 10;
     if (f.elbow > 155) score -= 15;
+    if (f.isUpright && f.knee > 160) score -= 10;
     return score;
   },
   seatedRow: (f) => {
@@ -182,18 +222,27 @@ const EXERCISE_RULES = {
   shoulderPress: (f) => {
     let score = 0;
     if (f.isUpright) score += 15;
-    if (f.wristAboveShoulder) score += 40;
-    if (f.shoulder > 120) score += 25;
+    if (f.wristAboveShoulder) score += 35;
+    if (f.armElevation > 120) score += 25;
+    if (f.shoulder > 120) score += 20;
     if (f.elbow > 90) score += 10;
+    if (f.armElevation < 45) score -= 20;
     return score;
   },
   bicepCurl: (f) => {
     let score = 0;
     if (f.isUpright) score += 15;
-    if (f.elbow < 80) score += 35;
-    if (f.shoulder < 35) score += 25;
-    if (f.wristAtChest) score += 15;
+    if (f.elbow < 80) score += 30;
+    if (f.elbow < 120) score += 10;
+    if (f.shoulder < 35) score += 20;
+    if (f.elbowsPinned) score += 15;
+    if (f.armsAtSides) score += 10;
+    if (f.wristAtChest) score += 10;
+    if (f.wristAboveElbow && f.armElevation < 30) score += 10;
+    if (f.knee > 160) score += 5;
     if (f.isLeaning) score -= 10;
+    if (f.knee < 130) score -= 15;
+    if (f.armElevation > 60) score -= 20;
     return score;
   },
   latPulldown: (f) => {
@@ -202,7 +251,9 @@ const EXERCISE_RULES = {
     if (f.armSpread > 2.0) score += 25;
     if (f.shoulder > 100) score += 20;
     if (f.elbow < 130 && f.elbow > 60) score += 15;
+    if (f.armElevation > 100) score += 10;
     if (f.knee > 140) score += 5;
+    if (f.armElevation < 40) score -= 15;
     return score;
   },
   pullUp: (f) => {
@@ -211,6 +262,7 @@ const EXERCISE_RULES = {
     if (f.armSpread > 1.5) score += 15;
     if (f.shoulder > 110) score += 20;
     if (f.elbow < 120) score += 15;
+    if (f.armElevation > 100) score += 10;
     return score;
   },
   lunge: (f) => {
@@ -238,15 +290,18 @@ const EXERCISE_RULES = {
     if (f.wristAtShoulder || f.wristAtChest) score += 25;
     if (f.elbow > 110) score += 15;
     if (f.shoulder > 50 && f.shoulder < 120) score += 10;
+    if (f.armElevation > 40 && f.armElevation < 100) score += 5;
     return score;
   },
   lateralRaise: (f) => {
     let score = 0;
     if (f.isUpright) score += 10;
-    if (f.armSpread > 2.0) score += 25;
-    if (f.wristAtShoulder) score += 30;
-    if (f.elbow > 140) score += 15;
+    if (f.armSpread > 2.0) score += 20;
+    if (f.wristAtShoulder) score += 25;
+    if (f.armElevation > 60 && f.armElevation < 110) score += 25;
+    if (f.elbow > 140) score += 10;
     if (f.shoulder > 70 && f.shoulder < 110) score += 10;
+    if (f.armElevation < 30) score -= 15;
     return score;
   },
   hipThrust: (f) => {
@@ -255,6 +310,178 @@ const EXERCISE_RULES = {
     if (f.knee > 70 && f.knee < 120) score += 20;
     if (f.hip > 140) score += 25;
     if (f.shoulder < 50) score += 10;
+    return score;
+  },
+
+  // ── 고빈도 추가 운동 (8개) ──
+
+  pushUp: (f) => {
+    let score = 0;
+    if (f.isHorizontal && !f.isStandingBentOver) score += 35;
+    if (f.elbow < 120) score += 20;
+    if (f.knee > 150) score += 15;
+    if (f.armSpread > 1.2 && f.armSpread < 2.5) score += 10;
+    if (f.hip > 140) score += 10;
+    if (f.isStandingBentOver) score -= 30;
+    if (f.isUpright) score -= 20;
+    return score;
+  },
+  dip: (f) => {
+    let score = 0;
+    if (f.isUpright || f.isLeaning) score += 10;
+    if (f.elbow < 100) score += 25;
+    if (f.armElevation > 10 && f.armElevation < 50) score += 15;
+    if (f.wristBelowHip) score += 15;
+    if (f.shoulder > 30 && f.shoulder < 80) score += 10;
+    if (f.knee > 140) score += 5;
+    if (f.isHorizontal) score -= 15;
+    return score;
+  },
+  chinUp: (f) => {
+    let score = 0;
+    if (f.wristAboveShoulder) score += 25;
+    if (f.armSpread > 0.8 && f.armSpread < 1.8) score += 15;
+    if (f.armElevation > 100) score += 20;
+    if (f.elbow < 120) score += 15;
+    if (f.shoulder > 110) score += 10;
+    return score;
+  },
+  frontSquat: (f) => {
+    let score = 0;
+    if (f.isUpright) score += 25;
+    if (f.knee < 140) score += 15;
+    if (f.knee < 110) score += 15;
+    if (f.hip < 110) score += 10;
+    if (f.wristAboveShoulder || f.wristAtShoulder) score += 15;
+    if (f.armElevation > 60) score += 10;
+    if (f.isLeaning) score -= 10;
+    if (f.knee > 160) score -= 15;
+    return score;
+  },
+  romanianDeadlift: (f) => {
+    let score = 0;
+    if (f.isLeaning || f.isHorizontal) score += 25;
+    if (f.hip < 130) score += 20;
+    if (f.knee > 140) score += 20;
+    if (f.wristBelowHip) score += 15;
+    if (f.elbow > 150) score += 10;
+    if (f.isUpright && f.knee > 160) score -= 15;
+    return score;
+  },
+  hammerCurl: (f) => {
+    let score = 0;
+    if (f.isUpright) score += 15;
+    if (f.elbow < 80) score += 25;
+    if (f.elbow < 120) score += 10;
+    if (f.shoulder < 35) score += 20;
+    if (f.elbowsPinned) score += 15;
+    if (f.armsAtSides) score += 10;
+    if (f.knee > 160) score += 5;
+    if (f.isLeaning) score -= 10;
+    if (f.knee < 130) score -= 15;
+    if (f.armElevation > 60) score -= 20;
+    return score;
+  },
+  calfRaise: (f) => {
+    let score = 0;
+    if (f.isUpright) score += 25;
+    if (f.knee > 160) score += 25;
+    if (f.hip > 160) score += 15;
+    if (f.elbow > 140) score += 5;
+    if (f.armElevation < 30) score += 5;
+    if (f.knee < 140) score -= 20;
+    return score;
+  },
+  crunch: (f) => {
+    let score = 0;
+    if (f.isHorizontal || f.isLeaning) score += 20;
+    if (f.hip < 100) score += 20;
+    if (f.knee < 110) score += 15;
+    if (f.elbow > 100) score += 10;
+    if (f.isUpright) score -= 15;
+    if (f.isStandingBentOver) score -= 20;
+    return score;
+  },
+
+  // ── 중빈도 추가 운동 (8개) ──
+
+  frontRaise: (f) => {
+    let score = 0;
+    if (f.isUpright) score += 10;
+    if (f.armElevation > 50 && f.armElevation < 110) score += 25;
+    if (f.armSpread < 1.5) score += 15;
+    if (f.wristAtShoulder) score += 20;
+    if (f.elbow > 140) score += 10;
+    if (f.armElevation < 20) score -= 15;
+    return score;
+  },
+  shrug: (f) => {
+    let score = 0;
+    if (f.isUpright) score += 20;
+    if (f.armsAtSides) score += 20;
+    if (f.elbow > 150) score += 15;
+    if (f.armElevation < 20) score += 15;
+    if (f.knee > 160) score += 5;
+    if (f.wristBelowHip) score += 10;
+    if (f.elbow < 120) score -= 15;
+    return score;
+  },
+  uprightRow: (f) => {
+    let score = 0;
+    if (f.isUpright) score += 10;
+    if (f.armElevation > 40 && f.armElevation < 100) score += 20;
+    if (f.elbow < 100) score += 15;
+    if (f.wristAtChest || f.wristAtShoulder) score += 20;
+    if (f.armSpread < 1.5) score += 10;
+    if (f.armElevation < 20) score -= 10;
+    return score;
+  },
+  tricepPushdown: (f) => {
+    let score = 0;
+    if (f.isUpright) score += 15;
+    if (f.elbowsPinned) score += 20;
+    if (f.elbow > 120) score += 15;
+    if (f.wristBelowHip || f.wristAtChest) score += 10;
+    if (f.armElevation < 25) score += 15;
+    if (f.armElevation > 60) score -= 15;
+    return score;
+  },
+  overheadExtension: (f) => {
+    let score = 0;
+    if (f.isUpright) score += 10;
+    if (f.wristAboveShoulder) score += 20;
+    if (f.armElevation > 120) score += 25;
+    if (f.elbow < 90) score += 20;
+    if (f.armSpread < 1.0) score += 10;
+    return score;
+  },
+  bulgarianSplit: (f) => {
+    let score = 0;
+    if (f.isUpright) score += 10;
+    if (f.kneeAsym > 30) score += 30;
+    if (f.kneeAsym > 50) score += 15;
+    if (f.knee < 140) score += 10;
+    if (f.elbowAsym < 10) score += 5;
+    return score;
+  },
+  legExtension: (f) => {
+    let score = 0;
+    if (!f.isHorizontal) score += 10;
+    if (f.knee > 120 && f.knee < 170) score += 20;
+    if (f.hip > 80 && f.hip < 120) score += 20;
+    if (f.elbow > 130) score += 5;
+    if (f.isUpright) score += 10;
+    if (f.isStandingBentOver) score -= 20;
+    return score;
+  },
+  backExtension: (f) => {
+    let score = 0;
+    if (f.isLeaning || f.isHorizontal) score += 20;
+    if (f.hip > 100 && f.hip < 180) score += 15;
+    if (f.knee > 150) score += 15;
+    if (f.elbow > 130) score += 5;
+    if (f.wristAtChest || f.wristAboveShoulder) score += 10;
+    if (f.isStandingBentOver) score -= 10;
     return score;
   },
 };
