@@ -43,6 +43,7 @@ const initialState = {
   toast: "",
   mobileTab: 0,
   showAdmin: false,
+  muscleOverrides: null,
   brand: {
     gymName: "MY GYM",
     tagline: "Transform Your Body",
@@ -105,6 +106,8 @@ function appReducer(state, action) {
       return { ...state, mobileTab: action.value };
     case "SET_SHOW_ADMIN":
       return { ...state, showAdmin: action.value };
+    case "SET_MUSCLE_OVERRIDES":
+      return { ...state, muscleOverrides: action.value };
     case "SET_WORST_FRAME":
       return { ...state, worstFrame: action.value };
     case "RESET":
@@ -135,7 +138,7 @@ export default function App() {
     videoFile, worstFrame, selectedExercise, autoDetected,
     analysis, glowIntensity, showSkeleton, showLabels,
     showCorrections, mediapipeStatus, isAnalyzing, toast,
-    mobileTab, showAdmin, brand,
+    mobileTab, showAdmin, brand, muscleOverrides,
   } = state;
 
   useEffect(() => {
@@ -327,6 +330,7 @@ export default function App() {
         <AnatomicalDiagram
           exerciseKey={effectiveExerciseKey}
           analysis={analysis}
+          onEditChange={(overrides) => dispatch({ type: "SET_MUSCLE_OVERRIDES", value: overrides })}
         />
         <MuscleInfo exerciseKey={effectiveExerciseKey} analysis={analysis} />
       </>
@@ -381,6 +385,7 @@ export default function App() {
               showLabels={showLabels}
               canvasRef={canvasRef}
               analysis={analysis}
+              muscleOverrides={muscleOverrides}
             />
           ) : (
             <VideoPlayer

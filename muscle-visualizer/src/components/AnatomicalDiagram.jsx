@@ -85,7 +85,7 @@ function cycleKey(primary, secondary, key, activation) {
   return { primary: newP, secondary: newS };
 }
 
-export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewProp, style, onMuscleUpdate }) {
+export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewProp, style, onMuscleUpdate, onEditChange }) {
   const exercise = getMergedExercise(exerciseKey);
   const [view, setView] = useState(viewProp || "front");
   const [editMode, setEditMode] = useState(false);
@@ -153,6 +153,15 @@ export default function AnatomicalDiagram({ exerciseKey, analysis, view: viewPro
       setEditSecondary(newS);
     }
   }, [sideEdit]);
+
+  // 편집 변경 시 부모에게 실시간 전달
+  useEffect(() => {
+    if (editMode && onEditChange) {
+      onEditChange({ primary: editPrimary, secondary: editSecondary });
+    } else if (!editMode && onEditChange) {
+      onEditChange(null);
+    }
+  }, [editMode, editPrimary, editSecondary, onEditChange]);
 
   // Build activeMuscles
   const activeMuscles = useMemo(() => {

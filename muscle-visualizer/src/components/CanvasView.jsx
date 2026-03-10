@@ -6,7 +6,7 @@ import { MUSCLE_REGIONS } from "../data/muscles";
 export default function CanvasView({
   image, landmarks, exerciseKey, canvasSize,
   glowIntensity, showSkeleton, showLabels = true,
-  canvasRef: externalRef, analysis,
+  canvasRef: externalRef, analysis, muscleOverrides,
 }) {
   const internalRef = useRef(null);
   const canvasRef = externalRef || internalRef;
@@ -32,7 +32,7 @@ export default function CanvasView({
 
       if (landmarks) {
         renderMuscleOverlay(ctx, landmarks, exerciseKey, canvasSize.w, canvasSize.h, {
-          glowIntensity, showSkeleton, showLabels, time, muscleStatus,
+          glowIntensity, showSkeleton, showLabels, time, muscleStatus, muscleOverrides,
         });
       }
 
@@ -43,7 +43,7 @@ export default function CanvasView({
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
-  }, [image, landmarks, exerciseKey, canvasSize, glowIntensity, showSkeleton, showLabels, muscleStatusKey]);
+  }, [image, landmarks, exerciseKey, canvasSize, glowIntensity, showSkeleton, showLabels, muscleStatusKey, muscleOverrides]);
 
   return (
     <div style={{ position: "relative", display: "inline-block", width: "100%" }}>
@@ -64,9 +64,12 @@ export default function CanvasView({
         <ExerciseBadge exercise={exercise} />
       )}
 
-      {/* 하단 근육 범례 */}
+      {/* 하단 근육 범례 — 편집 중이면 오버라이드 데이터 반영 */}
       {exercise && (
-        <MuscleLegend exercise={exercise} muscleStatus={muscleStatus} />
+        <MuscleLegend
+          exercise={muscleOverrides ? { ...exercise, primary: muscleOverrides.primary, secondary: muscleOverrides.secondary } : exercise}
+          muscleStatus={muscleStatus}
+        />
       )}
     </div>
   );

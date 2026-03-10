@@ -219,7 +219,7 @@ function renderSkeleton(ctx, landmarks, canvasW, canvasH) {
  */
 export function renderMuscleOverlay(
   ctx, landmarks, exerciseKey, canvasW, canvasH,
-  { glowIntensity = 0.7, showSkeleton = false, showLabels = true, time = 0, muscleStatus = {} }
+  { glowIntensity = 0.7, showSkeleton = false, showLabels = true, time = 0, muscleStatus = {}, muscleOverrides = null }
 ) {
   const exercise = EXERCISE_DB[exerciseKey];
   if (!exercise || !landmarks) return;
@@ -228,14 +228,23 @@ export function renderMuscleOverlay(
   const bodyScale = getBodyScale(landmarks, canvasW);
   const pulse = PULSE_BASE + Math.sin(time * PULSE_SPEED) * PULSE_AMPLITUDE;
 
+  // muscleOverrides가 있으면 편집 중인 근육 데이터를 사용
+  const primary = muscleOverrides ? muscleOverrides.primary : (exercise.primary || {});
+  const secondary = muscleOverrides ? muscleOverrides.secondary : (exercise.secondary || {});
+
   const activeMuscles = new Map();
-  Object.keys(exercise.primary || {}).forEach((k) => activeMuscles.set(k, "primary"));
-  Object.keys(exercise.secondary || {}).forEach((k) => {
+  Object.keys(primary).forEach((k) => activeMuscles.set(k, "primary"));
+  Object.keys(secondary).forEach((k) => {
     if (!activeMuscles.has(k)) activeMuscles.set(k, "secondary");
   });
 
+  // 라벨 렌더링 시에도 오버라이드된 데이터 사용
+  const effectiveExercise = muscleOverrides
+    ? { ...exercise, primary, secondary }
+    : exercise;
+
   renderGlowLayer(ctx, positions, activeMuscles, muscleStatus, bodyScale, glowIntensity, pulse);
-  if (showLabels) renderLabels(ctx, positions, exercise, activeMuscles, muscleStatus, canvasW);
+  if (showLabels) renderLabels(ctx, positions, effectiveExercise, activeMuscles, muscleStatus, canvasW);
   if (showSkeleton) renderSkeleton(ctx, landmarks, canvasW, canvasH);
 }
 
