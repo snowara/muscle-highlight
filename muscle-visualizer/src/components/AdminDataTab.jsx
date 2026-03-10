@@ -6,6 +6,7 @@
 import { useRef } from "react";
 import { exportAllData, importAllData, resetAllCustomizations } from "../lib/customExerciseStore";
 import { clearLearningData } from "../lib/learningStore";
+import SyncPanel from "./SyncPanel";
 
 export default function AdminDataTab({ showToast, styles }) {
   const fileRef = useRef(null);
@@ -50,6 +51,10 @@ export default function AdminDataTab({ showToast, styles }) {
   return (
     <div>
       <h2 style={styles.heading}>데이터 관리</h2>
+
+      <SyncPanel onToast={showToast} styles={styles} />
+
+      <div style={{ height: 16 }} />
 
       <Section title="내보내기">
         <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
