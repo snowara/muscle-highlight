@@ -121,7 +121,7 @@ export const MUSCLE_REGIONS = {
   },
   lowerBack: {
     label: "척추기립근",
-    simpleLabel: "허리 척추기립근",
+    simpleLabel: "척추기립근",
     detail: "척추 양옆으로 길게 뻗은 근육. 몸을 세우고 허리를 보호하는 역할이에요.",
     color: "#1DE9B6",
     bodyPart: "등 하부",
