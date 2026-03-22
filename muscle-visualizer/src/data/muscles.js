@@ -69,7 +69,7 @@ export const MUSCLE_REGIONS = {
   // ── 등 ──
   rhomboids: {
     label: "능형근",
-    simpleLabel: "등 안쪽",
+    simpleLabel: "능형근",
     detail: "견갑골 사이 안쪽에 위치한 근육. 어깨뼈를 모아주고 바른 자세를 유지하는 데 핵심이에요.",
     color: "#9C27B0",
     bodyPart: "등 중부",
@@ -77,7 +77,7 @@ export const MUSCLE_REGIONS = {
   },
   lats: {
     label: "광배근",
-    simpleLabel: "등바깥쪽",
+    simpleLabel: "광배근",
     detail: "등에서 가장 넓은 근육. 풀업할 때 V자 등을 만들어주는 핵심이에요.",
     color: "#7C4DFF",
     bodyPart: "등",
