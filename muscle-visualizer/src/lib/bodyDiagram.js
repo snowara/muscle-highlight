@@ -245,8 +245,8 @@ function renderBody(bodyPaths) {
   ).join("\n");
 }
 
-const FRONT_ORDER = ["core", "adductors", "quadriceps", "tibialis", "calves", "chestMajor", "trapsUpper", "shoulderFront", "biceps", "triceps"];
-const BACK_ORDER = ["lowerBack", "rhomboids", "lats", "adductors", "hamstrings", "calves", "glutes", "trapsUpper", "shoulderRear", "triceps"];
+const FRONT_ORDER = ["core", "adductors", "quadriceps", "tibialis", "calves", "chestMajor", "chestMinor", "trapsUpper", "shoulderFront", "shoulderLateral", "biceps", "triceps"];
+const BACK_ORDER = ["lowerBack", "rhomboids", "lats", "adductors", "hamstrings", "calves", "glutes", "trapsUpper", "trapsMid", "trapsLower", "shoulderRear", "triceps"];
 
 // ===============================================================
 // PUBLIC API
@@ -315,6 +315,9 @@ const FRONT_MUSCLES = {
     common:     [
 
     ],
+  },
+  chestMinor: {
+    left: [], right: [], common: [],
   },
   core: {
     left:     [
@@ -393,6 +396,9 @@ const FRONT_MUSCLES = {
 
     ],
   },
+  shoulderLateral: {
+    left: [], right: [], common: [],
+  },
   adductors: {
     left:     [
       "M280.26 647.4c11.65 10.74 22.18 21.04 31.02 34.3 15.82 23.72 27.55 49.72 34.01 77.58 1.34 5.79-6.14 20.34-12.62 20.22q-.52-.01-.72-.49-.67-1.59-1.21-3.13c-14.68-41.71-27.96-79.71-46.87-117.01-1.9-3.74-3.05-7.33-4.06-11.2a.27.27 0 01.45-.27z",
@@ -466,6 +472,12 @@ const BACK_MUSCLES = {
     common:     [
 
     ],
+  },
+  trapsMid: {
+    left: [], right: [], common: [],
+  },
+  trapsLower: {
+    left: [], right: [], common: [],
   },
   shoulderRear: {
     left:     [
