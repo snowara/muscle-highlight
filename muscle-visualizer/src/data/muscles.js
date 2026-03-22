@@ -1,25 +1,54 @@
 // ============================================================
-// muscles.js — 14개 주요 근육 데이터 (NSCA-CSCS 기준 보강)
+// muscles.js — 19개 주요 근육 데이터 (NSCA-CSCS 기준 보강)
 // 회원 눈높이 설명 + 해부학 정보 + 시각화 컬러
 // ============================================================
 
 export const MUSCLE_REGIONS = {
-  chest: {
-    label: "대흉근 / 소흉근",
-    simpleLabel: "가슴",
-    detail: "벤치프레스할 때 쥐어짜는 그 근육. 팔굽혀펴기할 때도 주로 쓰여요.",
+  // ── 가슴 (2개 분리) ──
+  chestMajor: {
+    label: "대흉근",
+    simpleLabel: "대흉근",
+    detail: "가슴의 큰 근육. 벤치프레스, 푸시업 때 주로 쓰여요.",
     color: "#FF3B5C",
     bodyPart: "상체 앞",
-    englishName: "Pectoralis Major / Minor",
+    englishName: "Pectoralis Major",
   },
-  shoulders: {
-    label: "삼각근",
-    simpleLabel: "어깨 (전면·측면·후면)",
-    detail: "어깨를 둥글게 감싸는 근육. 앞·옆·뒤 세 부분으로 나뉘어요.",
+  chestMinor: {
+    label: "소흉근",
+    simpleLabel: "소흉근",
+    detail: "대흉근 아래 작은 근육. 어깨뼈를 아래로 당기고 안정시키는 역할이에요.",
+    color: "#FF5C7C",
+    bodyPart: "상체 앞",
+    englishName: "Pectoralis Minor",
+  },
+
+  // ── 어깨 (3개 분리) ──
+  shoulderFront: {
+    label: "전면삼각근",
+    simpleLabel: "어깨 전면",
+    detail: "어깨 앞쪽 근육. 프론트레이즈, 숄더프레스 때 주로 쓰여요.",
     color: "#FF6B35",
-    bodyPart: "상체",
-    englishName: "Deltoid (Anterior / Lateral / Posterior)",
+    bodyPart: "상체 앞",
+    englishName: "Anterior Deltoid",
   },
+  shoulderLateral: {
+    label: "측면삼각근",
+    simpleLabel: "어깨 측면",
+    detail: "어깨 옆쪽 근육. 사이드 레터럴 레이즈의 주인공이에요.",
+    color: "#FF8535",
+    bodyPart: "상체",
+    englishName: "Lateral Deltoid",
+  },
+  shoulderRear: {
+    label: "후면삼각근",
+    simpleLabel: "어깨 후면",
+    detail: "어깨 뒤쪽 근육. 리어 델트 플라이, 페이스풀 때 쓰여요.",
+    color: "#FF9B55",
+    bodyPart: "상체 뒤",
+    englishName: "Posterior Deltoid",
+  },
+
+  // ── 팔 ──
   biceps: {
     label: "상완이두근",
     simpleLabel: "이두",
@@ -36,6 +65,8 @@ export const MUSCLE_REGIONS = {
     bodyPart: "팔 뒤쪽",
     englishName: "Triceps Brachii",
   },
+
+  // ── 등 ──
   rhomboids: {
     label: "능형근",
     simpleLabel: "등 안쪽",
@@ -52,14 +83,34 @@ export const MUSCLE_REGIONS = {
     bodyPart: "등",
     englishName: "Latissimus Dorsi",
   },
-  traps: {
-    label: "승모근",
-    simpleLabel: "승모근 (상부·중부·하부)",
-    detail: "목에서 어깨, 등 위쪽까지 마름모꼴로 퍼진 근육. 슈러그할 때 쓰여요.",
+
+  // ── 승모근 (3개 분리) ──
+  trapsUpper: {
+    label: "상부승모근",
+    simpleLabel: "상부 승모근",
+    detail: "목에서 어깨까지. 슈러그할 때 주로 쓰이는 부분이에요.",
     color: "#E040FB",
     bodyPart: "등 상부",
-    englishName: "Trapezius (Upper / Middle / Lower)",
+    englishName: "Upper Trapezius",
   },
+  trapsMid: {
+    label: "중부승모근",
+    simpleLabel: "중부 승모근",
+    detail: "견갑골 사이. 로우 운동에서 어깨뼈를 모을 때 쓰여요.",
+    color: "#CE40EB",
+    bodyPart: "등 중부",
+    englishName: "Middle Trapezius",
+  },
+  trapsLower: {
+    label: "하부승모근",
+    simpleLabel: "하부 승모근",
+    detail: "등 중간 아래. 어깨뼈를 아래로 내리고 안정시키는 역할이에요.",
+    color: "#BC40DB",
+    bodyPart: "등 하부",
+    englishName: "Lower Trapezius",
+  },
+
+  // ── 몸통 ──
   core: {
     label: "복근 / 코어",
     simpleLabel: "배 (복부)",
@@ -76,9 +127,11 @@ export const MUSCLE_REGIONS = {
     bodyPart: "등 하부",
     englishName: "Erector Spinae",
   },
+
+  // ── 하체 ──
   glutes: {
     label: "둔근",
-    simpleLabel: "엉덩이 둔근",
+    simpleLabel: "둔근",
     detail: "몸에서 가장 크고 강한 근육. 스쿼트·힙쓰러스트 때 힘의 원천이에요.",
     color: "#69F0AE",
     bodyPart: "하체",
@@ -86,7 +139,7 @@ export const MUSCLE_REGIONS = {
   },
   quadriceps: {
     label: "대퇴사두근",
-    simpleLabel: "허벅지앞 대퇴사두",
+    simpleLabel: "대퇴사두",
     detail: "허벅지 앞쪽 4개의 근육 묶음. 무릎을 펴는 동작의 주력이에요.",
     color: "#00E676",
     bodyPart: "하체 앞",
@@ -94,7 +147,7 @@ export const MUSCLE_REGIONS = {
   },
   hamstrings: {
     label: "대퇴이두근",
-    simpleLabel: "허벅지뒤 대퇴이두",
+    simpleLabel: "대퇴이두",
     detail: "허벅지 뒤쪽 3개 근육. 무릎을 굽히고 엉덩이를 펴는 데 쓰여요.",
     color: "#76FF03",
     bodyPart: "하체 뒤",

@@ -25,7 +25,7 @@ export const CORE_EXERCISES = {
     snsTags: ["#플랭크", "#코어운동", "#복근", "#plank", "#코어강화"],
     isIsometric: true,
     primary: { core: 85 },
-    secondary: { shoulders: 30, glutes: 35, quadriceps: 15 },
+    secondary: { shoulderFront: 30, glutes: 35, quadriceps: 15 },
     trainerTip: "머리부터 발뒤꿈치까지 일직선! 엉덩이가 올라가거나 처지지 않게 거울로 확인!",
     goodFormMessage: "완벽한 플랭크 자세! 머리부터 발끝까지 일직선이에요. 코어가 단단하게 잡혔어요!",
     corrections: [
@@ -99,7 +99,7 @@ export const CORE_EXERCISES = {
     snsTags: ["#러시안트위스트", "#복사근"],
     isIsometric: false,
     primary: { core: 80 },
-    secondary: { shoulders: 15 },
+    secondary: { shoulderFront: 15 },
     trainerTip: "발을 살짝 들고, 배꼽 아래가 정면을 유지한 채 상체만 회전!",
     goodFormMessage: "복사근이 불타고 있어요! 회전 동작이 안정적!",
     corrections: [
@@ -119,7 +119,7 @@ export const CORE_EXERCISES = {
     snsTags: ["#AB휠", "#코어운동"],
     isIsometric: false,
     primary: { core: 92, lats: 35 },
-    secondary: { shoulders: 30, triceps: 20 },
+    secondary: { shoulderFront: 30, triceps: 20 },
     trainerTip: "골반을 후방 틸트한 채로 밀어 나가세요. 허리가 꺾이면 즉시 멈추세요!",
     goodFormMessage: "AB 휠 폼이 안정적이에요! 코어 컨트롤이 대단해요!",
     corrections: [
@@ -143,7 +143,7 @@ export const CORE_EXERCISES = {
     snsTags: ["#데드리프트", "#등운동", "#전신운동", "#deadlift", "#파워리프팅"],
     isIsometric: false,
     primary: { hamstrings: 80, glutes: 85, lowerBack: 75 },
-    secondary: { quadriceps: 40, core: 65, traps: 55, rhomboids: 50 },
+    secondary: { quadriceps: 40, core: 65, trapsUpper: 55, rhomboids: 50 },
     trainerTip: "바벨은 항상 정강이에 붙여서! 가슴을 펴고 엉덩이와 어깨를 동시에 올리세요.",
     goodFormMessage: "훌륭한 데드리프트! 등이 곧고 바가 몸에 딱 붙어 있어요. 힘 전달 최고!",
     corrections: [
@@ -182,7 +182,7 @@ export const CORE_EXERCISES = {
     snsTags: ["#루마니안데드리프트", "#RDL", "#햄스트링", "#둔근", "#힌지운동"],
     isIsometric: false,
     primary: { hamstrings: 88, glutes: 78, lowerBack: 60 },
-    secondary: { core: 45, traps: 25 },
+    secondary: { core: 45, trapsUpper: 25 },
     trainerTip: "무릎은 살짝 굽힌 채 고정! 엉덩이를 뒤로 빼면서 바를 허벅지에 밀착시켜 내리세요.",
     goodFormMessage: "RDL 폼이 교과서적이에요! 힌지 동작과 바 경로가 완벽해요!",
     corrections: [
@@ -215,8 +215,8 @@ export const CORE_EXERCISES = {
     description: "전신 파워 운동. 폭발적 고관절 신전 → 오버헤드 프레스.",
     snsTags: ["#클린앤프레스", "#전신운동", "#올림픽리프팅"],
     isIsometric: false,
-    primary: { shoulders: 75, quadriceps: 70, glutes: 70 },
-    secondary: { core: 55, traps: 50, triceps: 40, hamstrings: 45 },
+    primary: { shoulderFront: 75, quadriceps: 70, glutes: 70 },
+    secondary: { core: 55, trapsUpper: 50, triceps: 40, hamstrings: 45 },
     trainerTip: "클린은 팔이 아닌 고관절 폭발로! 프레스는 안정된 상태에서 밀어 올리세요.",
     goodFormMessage: "클린 앤 프레스가 유기적으로 연결되고 있어요! 파워풀!",
     corrections: [
@@ -236,7 +236,7 @@ export const CORE_EXERCISES = {
     snsTags: ["#케틀벨스윙", "#전신운동", "#HIIT"],
     isIsometric: false,
     primary: { glutes: 82, hamstrings: 70, core: 55 },
-    secondary: { shoulders: 25, lats: 20, quadriceps: 20 },
+    secondary: { shoulderFront: 25, lats: 20, quadriceps: 20 },
     trainerTip: "스윙은 팔이 아닌 엉덩이 힌지! 둔근을 쥐어짜며 골반을 앞으로 밀어요.",
     goodFormMessage: "힌지 동작이 깔끔해요! 둔근이 제대로 쓰이고 있어요!",
     corrections: [
@@ -255,8 +255,8 @@ export const CORE_EXERCISES = {
     description: "전신 심폐·근력 복합 운동. 지방 연소 최강.",
     snsTags: ["#버피", "#전신운동", "#HIIT"],
     isIsometric: false,
-    primary: { quadriceps: 60, chest: 55, core: 60 },
-    secondary: { shoulders: 40, triceps: 35, glutes: 40 },
+    primary: { quadriceps: 60, chestMajor: 55, core: 60 },
+    secondary: { shoulderFront: 40, triceps: 35, glutes: 40 },
     trainerTip: "바닥에서 가슴까지 닿은 후 폭발적으로 일어나세요. 점프는 가볍게!",
     goodFormMessage: "버피 템포가 좋아요! 전신이 유기적으로 움직이고 있어요!",
     corrections: [

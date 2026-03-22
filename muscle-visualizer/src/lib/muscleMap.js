@@ -1,12 +1,17 @@
 // Shape metadata: angle (radians), aspect ratio (width/height), scale multiplier
 export const MUSCLE_SHAPES = {
-  chest:      { angle: 0,        aspect: 1.8, scale: 1.3 },
-  shoulders:  { angle: 0,        aspect: 1.2, scale: 1.0 },
+  chestMajor:      { angle: 0,        aspect: 1.8, scale: 1.3 },
+  chestMinor:      { angle: 0,        aspect: 1.2, scale: 0.7 },
+  shoulderFront:   { angle: 0,        aspect: 1.2, scale: 1.0 },
+  shoulderLateral: { angle: 0,        aspect: 1.0, scale: 0.8 },
+  shoulderRear:    { angle: 0,        aspect: 1.2, scale: 1.0 },
   biceps:     { angle: Math.PI * 0.15, aspect: 0.6, scale: 0.9 },
   triceps:    { angle: Math.PI * 0.15, aspect: 0.6, scale: 0.85 },
   rhomboids:  { angle: 0,              aspect: 0.8, scale: 0.9 },
   lats:       { angle: 0,        aspect: 0.7, scale: 1.1 },
-  traps:      { angle: 0,        aspect: 1.6, scale: 0.85 },
+  trapsUpper: { angle: 0,        aspect: 1.6, scale: 0.85 },
+  trapsMid:   { angle: 0,        aspect: 1.4, scale: 0.75 },
+  trapsLower: { angle: 0,        aspect: 1.2, scale: 0.65 },
   core:       { angle: 0,        aspect: 0.7, scale: 1.2 },
   lowerBack:  { angle: 0,        aspect: 1.2, scale: 1.0 },
   glutes:     { angle: 0,        aspect: 1.3, scale: 1.1 },
@@ -31,20 +36,29 @@ export function getMusclePositions(landmarks, canvasW, canvasH) {
   const shoulderWidth = Math.abs(rs.x - ls.x);
 
   const nose = p(0);
-  // Torso length for proportional offsets
   const torsoLen = Math.sqrt((hipMid.x - shoulderMid.x) ** 2 + (hipMid.y - shoulderMid.y) ** 2);
 
   return {
-    chest: [
+    chestMajor: [
       lerp(shoulderMid, hipMid, 0.08),
       { x: shoulderMid.x - shoulderWidth * 0.15, y: lerp(shoulderMid, hipMid, 0.14).y },
       { x: shoulderMid.x + shoulderWidth * 0.15, y: lerp(shoulderMid, hipMid, 0.14).y },
     ],
-    shoulders: [
-      { x: ls.x - shoulderWidth * 0.1, y: ls.y },
-      { x: ls.x - shoulderWidth * 0.04, y: ls.y + shoulderWidth * 0.08 },
-      { x: rs.x + shoulderWidth * 0.1, y: rs.y },
-      { x: rs.x + shoulderWidth * 0.04, y: rs.y + shoulderWidth * 0.08 },
+    chestMinor: [
+      { x: shoulderMid.x - shoulderWidth * 0.10, y: lerp(shoulderMid, hipMid, 0.05).y },
+      { x: shoulderMid.x + shoulderWidth * 0.10, y: lerp(shoulderMid, hipMid, 0.05).y },
+    ],
+    shoulderFront: [
+      { x: ls.x - shoulderWidth * 0.06, y: ls.y + shoulderWidth * 0.04 },
+      { x: rs.x + shoulderWidth * 0.06, y: rs.y + shoulderWidth * 0.04 },
+    ],
+    shoulderLateral: [
+      { x: ls.x - shoulderWidth * 0.12, y: ls.y },
+      { x: rs.x + shoulderWidth * 0.12, y: rs.y },
+    ],
+    shoulderRear: [
+      { x: ls.x - shoulderWidth * 0.08, y: ls.y + shoulderWidth * 0.06 },
+      { x: rs.x + shoulderWidth * 0.08, y: rs.y + shoulderWidth * 0.06 },
     ],
     biceps: [
       lerp(ls, le, 0.4),
@@ -64,19 +78,27 @@ export function getMusclePositions(landmarks, canvasW, canvasH) {
       { x: shoulderMid.x + shoulderWidth * 0.08, y: lerp(shoulderMid, hipMid, 0.15).y },
       { x: shoulderMid.x + shoulderWidth * 0.08, y: lerp(shoulderMid, hipMid, 0.30).y },
     ],
-    // LATS: mid-back, lateral (sides of torso, below armpit area)
     lats: [
       { x: ls.x + shoulderWidth * 0.12, y: lerp(ls, lh, 0.35).y },
       { x: ls.x + shoulderWidth * 0.12, y: lerp(ls, lh, 0.58).y },
       { x: rs.x - shoulderWidth * 0.12, y: lerp(rs, rh, 0.35).y },
       { x: rs.x - shoulderWidth * 0.12, y: lerp(rs, rh, 0.58).y },
     ],
-    // TRAPS: upper back/neck — clearly ABOVE the shoulder line, toward the neck
-    traps: [
+    trapsUpper: [
       lerp(shoulderMid, nose, 0.2),
       lerp(shoulderMid, nose, 0.4),
       { x: ls.x + shoulderWidth * 0.08, y: lerp(shoulderMid, nose, 0.15).y },
       { x: rs.x - shoulderWidth * 0.08, y: lerp(shoulderMid, nose, 0.15).y },
+    ],
+    trapsMid: [
+      { x: shoulderMid.x - shoulderWidth * 0.12, y: lerp(shoulderMid, hipMid, 0.08).y },
+      { x: shoulderMid.x + shoulderWidth * 0.12, y: lerp(shoulderMid, hipMid, 0.08).y },
+      { x: shoulderMid.x, y: lerp(shoulderMid, hipMid, 0.18).y },
+    ],
+    trapsLower: [
+      { x: shoulderMid.x - shoulderWidth * 0.10, y: lerp(shoulderMid, hipMid, 0.22).y },
+      { x: shoulderMid.x + shoulderWidth * 0.10, y: lerp(shoulderMid, hipMid, 0.22).y },
+      { x: shoulderMid.x, y: lerp(shoulderMid, hipMid, 0.32).y },
     ],
     core: [
       lerp(shoulderMid, hipMid, 0.42),
