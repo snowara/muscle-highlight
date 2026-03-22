@@ -4,7 +4,7 @@ export const MUSCLE_SHAPES = {
   shoulders:  { angle: 0,        aspect: 1.2, scale: 1.0 },
   biceps:     { angle: Math.PI * 0.15, aspect: 0.6, scale: 0.9 },
   triceps:    { angle: Math.PI * 0.15, aspect: 0.6, scale: 0.85 },
-  forearms:   { angle: Math.PI * 0.1,  aspect: 0.5, scale: 0.8 },
+  rhomboids:  { angle: 0,              aspect: 0.8, scale: 0.9 },
   lats:       { angle: 0,        aspect: 0.7, scale: 1.1 },
   traps:      { angle: 0,        aspect: 1.6, scale: 0.85 },
   core:       { angle: 0,        aspect: 0.7, scale: 1.2 },
@@ -58,11 +58,11 @@ export function getMusclePositions(landmarks, canvasW, canvasH) {
       lerp(rs, re, 0.45),
       lerp(rs, re, 0.65),
     ],
-    forearms: [
-      lerp(le, lw, 0.3),
-      lerp(le, lw, 0.6),
-      lerp(re, rw, 0.3),
-      lerp(re, rw, 0.6),
+    rhomboids: [
+      { x: shoulderMid.x - shoulderWidth * 0.08, y: lerp(shoulderMid, hipMid, 0.15).y },
+      { x: shoulderMid.x - shoulderWidth * 0.08, y: lerp(shoulderMid, hipMid, 0.30).y },
+      { x: shoulderMid.x + shoulderWidth * 0.08, y: lerp(shoulderMid, hipMid, 0.15).y },
+      { x: shoulderMid.x + shoulderWidth * 0.08, y: lerp(shoulderMid, hipMid, 0.30).y },
     ],
     // LATS: mid-back, lateral (sides of torso, below armpit area)
     lats: [

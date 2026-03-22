@@ -255,7 +255,7 @@ export const UPPER_EXERCISES = {
     snsTags: ["#랫풀다운", "#등운동", "#광배근", "#latpulldown", "#등데이"],
     isIsometric: false,
     primary: { lats: 85, biceps: 50 },
-    secondary: { traps: 30, shoulders: 20, forearms: 25 },
+    secondary: { traps: 30, shoulders: 20, rhomboids: 25 },
     trainerTip: "바를 쇄골 쪽으로 당기면서 가슴을 활짝 펴세요. 팔꿈치를 뒤로 모으는 느낌!",
     goodFormMessage: "광배근이 확실히 수축되고 있어요! 당기는 궤도와 상체 각도 모두 좋아요!",
     corrections: [
@@ -289,7 +289,7 @@ export const UPPER_EXERCISES = {
     snsTags: ["#풀업", "#턱걸이", "#등운동", "#pullup", "#맨몸운동"],
     isIsometric: false,
     primary: { lats: 90, biceps: 55 },
-    secondary: { traps: 35, forearms: 40, core: 30 },
+    secondary: { traps: 35, rhomboids: 40, core: 30 },
     trainerTip: "데드행에서 시작! 견갑골을 먼저 내려 모은 뒤, 팔꿈치를 허리 쪽으로 당기세요.",
     goodFormMessage: "풀업 자세 훌륭해요! 반동 없이 깨끗하게 올라가고 있어요. 등이 잘 쓰이고 있어요!",
     corrections: [
@@ -357,7 +357,7 @@ export const UPPER_EXERCISES = {
     snsTags: ["#친업", "#턱걸이", "#이두운동"],
     isIsometric: false,
     primary: { lats: 82, biceps: 65 },
-    secondary: { traps: 30, forearms: 35 },
+    secondary: { traps: 30, rhomboids: 35 },
     trainerTip: "손바닥이 나를 향하게! 풀업보다 이두 개입이 크니, 등을 의식적으로 쓰세요.",
     goodFormMessage: "친업 잘 되고 있어요! 등과 이두가 고르게 쓰이고 있어요!",
     corrections: [
@@ -377,7 +377,7 @@ export const UPPER_EXERCISES = {
     snsTags: ["#시티드로우", "#등운동", "#등두께"],
     isIsometric: false,
     primary: { lats: 78, traps: 55 },
-    secondary: { biceps: 40, forearms: 30, shoulders: 20 },
+    secondary: { biceps: 40, rhomboids: 30, shoulders: 20 },
     trainerTip: "가슴을 펴고 배꼽 쪽으로 당기세요. 뒤로 젖히지 말고 견갑골을 모으는 느낌!",
     goodFormMessage: "등 중앙이 확실히 수축되고 있어요! 자세가 안정적이에요!",
     corrections: [
@@ -418,7 +418,7 @@ export const UPPER_EXERCISES = {
     snsTags: ["#덤벨로우", "#원암로우", "#등운동"],
     isIsometric: false,
     primary: { lats: 80, traps: 50 },
-    secondary: { biceps: 40, forearms: 30 },
+    secondary: { biceps: 40, rhomboids: 30 },
     trainerTip: "벤치에 한 손과 무릎을 올리고, 덤벨을 골반 쪽으로 당기세요.",
     goodFormMessage: "원암 로우 잘 되고 있어요! 광배근 수축이 확실해요!",
     corrections: [
@@ -590,7 +590,7 @@ export const UPPER_EXERCISES = {
     snsTags: ["#업라이트로우", "#어깨운동"],
     isIsometric: false,
     primary: { shoulders: 75, traps: 60 },
-    secondary: { biceps: 30, forearms: 20 },
+    secondary: { biceps: 30, rhomboids: 20 },
     trainerTip: "와이드 그립으로! 팔꿈치를 바 위로 올린다는 느낌. 어깨 높이까지만.",
     goodFormMessage: "업라이트 로우 동작이 안정적이에요!",
     corrections: [
@@ -610,7 +610,7 @@ export const UPPER_EXERCISES = {
     snsTags: ["#슈러그", "#승모근"],
     isIsometric: false,
     primary: { traps: 90 },
-    secondary: { shoulders: 15, forearms: 25 },
+    secondary: { shoulders: 15, rhomboids: 25 },
     trainerTip: "어깨를 귀까지 끌어올리고 2초 유지! 회전하지 말고 수직으로만.",
     goodFormMessage: "승모근이 확실히 수축되고 있어요! 좋은 범위!",
     corrections: [
@@ -634,7 +634,7 @@ export const UPPER_EXERCISES = {
     snsTags: ["#바이셉컬", "#이두운동", "#팔운동", "#bicepcurl", "#덤벨컬"],
     isIsometric: false,
     primary: { biceps: 92 },
-    secondary: { forearms: 35 },
+    secondary: { rhomboids: 35 },
     trainerTip: "팔꿈치를 옆구리에 고정! 반동 쓰지 말고 이두근만으로 조여 올리세요.",
     goodFormMessage: "이두근에 정확히 집중되고 있어요! 팔꿈치 고정 완벽, 반동 제로!",
     corrections: [
@@ -667,7 +667,7 @@ export const UPPER_EXERCISES = {
     description: "상완근과 전완근을 함께 자극. 팔 전체 두께에 기여.",
     snsTags: ["#해머컬", "#팔운동"],
     isIsometric: false,
-    primary: { biceps: 70, forearms: 55 },
+    primary: { biceps: 70, biceps: 55 },
     secondary: {},
     trainerTip: "손바닥이 서로 마주보게! 팔꿈치 고정, 천천히 올리고 내리세요.",
     goodFormMessage: "해머 컬 잘 되고 있어요! 전완근까지 불타고 있을 거예요!",
@@ -688,7 +688,7 @@ export const UPPER_EXERCISES = {
     snsTags: ["#프리처컬", "#이두운동"],
     isIsometric: false,
     primary: { biceps: 88 },
-    secondary: { forearms: 30 },
+    secondary: { rhomboids: 30 },
     trainerTip: "겨드랑이를 패드 상단에 밀착! 완전히 펴지 말고 약간 남기세요.",
     goodFormMessage: "이두근 고립이 완벽해요! 패드 사용이 좋아요!",
     corrections: [
@@ -767,7 +767,7 @@ export const UPPER_EXERCISES = {
     description: "전완근(악력) 강화 운동. 그립 약한 사람에게 필수.",
     snsTags: ["#리스트컬", "#악력운동"],
     isIsometric: false,
-    primary: { forearms: 85 },
+    primary: { biceps: 85 },
     secondary: {},
     trainerTip: "전완을 무릎 위에 올리고, 손목만 움직이세요. 가볍게 고반복!",
     goodFormMessage: "전완근이 빵빵해지고 있어요! 좋은 범위!",

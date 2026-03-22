@@ -60,7 +60,7 @@ function drawShapedGlow(ctx, point, color, radius, alpha, shape) {
 
 const RENDER_ORDER = [
   "lowerBack", "core", "hamstrings", "quadriceps", "calves", "glutes",
-  "lats", "forearms", "biceps", "triceps", "chest", "shoulders", "traps",
+  "lats", "rhomboids", "biceps", "triceps", "chest", "shoulders", "traps",
 ];
 
 function drawMuscleLabel(ctx, points, label, color, status, canvasW, placedLabels) {

@@ -1,20 +1,20 @@
 // ============================================================
-// muscles.js — 13개 주요 근육 데이터 (NSCA-CSCS 기준 보강)
+// muscles.js — 14개 주요 근육 데이터 (NSCA-CSCS 기준 보강)
 // 회원 눈높이 설명 + 해부학 정보 + 시각화 컬러
 // ============================================================
 
 export const MUSCLE_REGIONS = {
   chest: {
-    label: "대흉근",
+    label: "대흉근 / 소흉근",
     simpleLabel: "가슴",
     detail: "벤치프레스할 때 쥐어짜는 그 근육. 팔굽혀펴기할 때도 주로 쓰여요.",
     color: "#FF3B5C",
     bodyPart: "상체 앞",
-    englishName: "Pectoralis Major",
+    englishName: "Pectoralis Major / Minor",
   },
   shoulders: {
     label: "삼각근",
-    simpleLabel: "어깨",
+    simpleLabel: "어깨 (전면·측면·후면)",
     detail: "어깨를 둥글게 감싸는 근육. 앞·옆·뒤 세 부분으로 나뉘어요.",
     color: "#FF6B35",
     bodyPart: "상체",
@@ -22,7 +22,7 @@ export const MUSCLE_REGIONS = {
   },
   biceps: {
     label: "상완이두근",
-    simpleLabel: "앞팔뚝 (이두)",
+    simpleLabel: "이두",
     detail: "팔 구부릴 때 볼록 올라오는 알통. 컬 운동의 주인공이에요.",
     color: "#FF8C42",
     bodyPart: "팔 앞쪽",
@@ -30,23 +30,23 @@ export const MUSCLE_REGIONS = {
   },
   triceps: {
     label: "상완삼두근",
-    simpleLabel: "뒷팔뚝 (삼두)",
+    simpleLabel: "삼두",
     detail: "팔 뒤쪽의 말발굽 모양 근육. 팔을 펼 때 쓰이고, 팔뚝 둘레의 2/3를 차지해요.",
     color: "#FFA726",
     bodyPart: "팔 뒤쪽",
     englishName: "Triceps Brachii",
   },
-  forearms: {
-    label: "전완근",
-    simpleLabel: "아래팔",
-    detail: "손목부터 팔꿈치까지. 그립 힘(악력)을 담당해요.",
-    color: "#FFD54F",
-    bodyPart: "팔 하부",
-    englishName: "Forearm Flexors / Extensors",
+  rhomboids: {
+    label: "능형근",
+    simpleLabel: "등 안쪽",
+    detail: "견갑골 사이 안쪽에 위치한 근육. 어깨뼈를 모아주고 바른 자세를 유지하는 데 핵심이에요.",
+    color: "#9C27B0",
+    bodyPart: "등 중부",
+    englishName: "Rhomboid Major / Minor",
   },
   lats: {
     label: "광배근",
-    simpleLabel: "등 옆 (날개)",
+    simpleLabel: "등바깥쪽",
     detail: "등에서 가장 넓은 근육. 풀업할 때 V자 등을 만들어주는 핵심이에요.",
     color: "#7C4DFF",
     bodyPart: "등",
@@ -54,7 +54,7 @@ export const MUSCLE_REGIONS = {
   },
   traps: {
     label: "승모근",
-    simpleLabel: "목~등 위쪽",
+    simpleLabel: "승모근 (상부·중부·하부)",
     detail: "목에서 어깨, 등 위쪽까지 마름모꼴로 퍼진 근육. 슈러그할 때 쓰여요.",
     color: "#E040FB",
     bodyPart: "등 상부",
@@ -62,7 +62,7 @@ export const MUSCLE_REGIONS = {
   },
   core: {
     label: "복근 / 코어",
-    simpleLabel: "배",
+    simpleLabel: "배 (복부)",
     detail: "식스팩이 있는 곳. 복직근뿐 아니라 옆구리(복사근), 깊은 층(복횡근)까지 포함해요.",
     color: "#00E5FF",
     bodyPart: "몸통 앞",
@@ -70,7 +70,7 @@ export const MUSCLE_REGIONS = {
   },
   lowerBack: {
     label: "척추기립근",
-    simpleLabel: "허리",
+    simpleLabel: "허리 척추기립근",
     detail: "척추 양옆으로 길게 뻗은 근육. 몸을 세우고 허리를 보호하는 역할이에요.",
     color: "#1DE9B6",
     bodyPart: "등 하부",
@@ -78,7 +78,7 @@ export const MUSCLE_REGIONS = {
   },
   glutes: {
     label: "둔근",
-    simpleLabel: "엉덩이",
+    simpleLabel: "엉덩이 둔근",
     detail: "몸에서 가장 크고 강한 근육. 스쿼트·힙쓰러스트 때 힘의 원천이에요.",
     color: "#69F0AE",
     bodyPart: "하체",
@@ -86,15 +86,15 @@ export const MUSCLE_REGIONS = {
   },
   quadriceps: {
     label: "대퇴사두근",
-    simpleLabel: "허벅지 앞",
+    simpleLabel: "허벅지앞 대퇴사두",
     detail: "허벅지 앞쪽 4개의 근육 묶음. 무릎을 펴는 동작의 주력이에요.",
     color: "#00E676",
     bodyPart: "하체 앞",
     englishName: "Quadriceps Femoris",
   },
   hamstrings: {
-    label: "햄스트링",
-    simpleLabel: "허벅지 뒤",
+    label: "대퇴이두근",
+    simpleLabel: "허벅지뒤 대퇴이두",
     detail: "허벅지 뒤쪽 3개 근육. 무릎을 굽히고 엉덩이를 펴는 데 쓰여요.",
     color: "#76FF03",
     bodyPart: "하체 뒤",

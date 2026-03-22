@@ -143,7 +143,7 @@ export const CORE_EXERCISES = {
     snsTags: ["#데드리프트", "#등운동", "#전신운동", "#deadlift", "#파워리프팅"],
     isIsometric: false,
     primary: { hamstrings: 80, glutes: 85, lowerBack: 75 },
-    secondary: { quadriceps: 40, core: 65, traps: 55, forearms: 50 },
+    secondary: { quadriceps: 40, core: 65, traps: 55, rhomboids: 50 },
     trainerTip: "바벨은 항상 정강이에 붙여서! 가슴을 펴고 엉덩이와 어깨를 동시에 올리세요.",
     goodFormMessage: "훌륭한 데드리프트! 등이 곧고 바가 몸에 딱 붙어 있어요. 힘 전달 최고!",
     corrections: [

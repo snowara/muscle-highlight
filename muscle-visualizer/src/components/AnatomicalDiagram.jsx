@@ -4,7 +4,7 @@ import { MUSCLE_REGIONS } from "../data/muscles";
 import { renderFrontBodySVG, renderBackBodySVG, FRONT_MUSCLE_KEYS, BACK_MUSCLE_KEYS } from "../lib/bodyDiagram";
 import { saveExercise, getCustomExercises } from "../lib/customExerciseStore";
 
-const BACK_VIEW_MUSCLES = new Set(["lats", "traps", "lowerBack", "glutes", "hamstrings"]);
+const BACK_VIEW_MUSCLES = new Set(["lats", "rhomboids", "traps", "lowerBack", "glutes", "hamstrings"]);
 const FRONT_VIEW_MUSCLES = new Set(["chest", "quadriceps", "biceps", "core"]);
 
 // 클릭 시 순환: 없음 → 주동근 → 보조근 → 없음
