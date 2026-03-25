@@ -7,7 +7,7 @@ import { renderFrontBodySVG, renderBackBodySVG } from "./bodyDiagram";
 const BRAND_BAR_HEIGHT = 60;
 
 // 다이어그램 크기 비율 (사진 높이 대비)
-const DIAGRAM_RATIO = 0.35;
+const DIAGRAM_RATIO = 0.42;
 const DIAGRAM_PADDING = 12;
 
 /**
