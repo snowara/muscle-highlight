@@ -2,8 +2,91 @@ import { EXERCISE_DB } from "../data/exercises";
 import { MUSCLE_REGIONS } from "../data/muscles";
 import { renderMuscleOverlay } from "./muscleRenderer";
 import { getScoreColor } from "./poseAnalyzer";
+import { renderFrontBodySVG, renderBackBodySVG } from "./bodyDiagram.render";
 
 const BRAND_BAR_HEIGHT = 60;
+
+// 다이어그램 크기 비율 (사진 높이 대비)
+const DIAGRAM_RATIO = 0.35;
+const DIAGRAM_PADDING = 12;
+
+/**
+ * SVG 문자열 → Canvas에 그리기 (Promise)
+ */
+function svgToImage(svgString, width, height) {
+  return new Promise((resolve) => {
+    const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.width = width;
+    img.height = height;
+    img.src = url;
+  });
+}
+
+/**
+ * 해부학 다이어그램을 우상단에 오버레이
+ */
+async function drawDiagramOverlay(ctx, w, h, exerciseKey, view = "front") {
+  const ex = EXERCISE_DB[exerciseKey];
+  if (!ex) return;
+
+  const activeMuscles = {};
+  if (ex.primary) {
+    for (const [k, v] of Object.entries(ex.primary)) {
+      activeMuscles[k] = { intensity: v, type: "primary" };
+    }
+  }
+  if (ex.secondary) {
+    for (const [k, v] of Object.entries(ex.secondary)) {
+      activeMuscles[k] = { intensity: v, type: "secondary" };
+    }
+  }
+
+  const svgString = view === "front"
+    ? renderFrontBodySVG(activeMuscles)
+    : renderBackBodySVG(activeMuscles);
+
+  const dH = Math.round(h * DIAGRAM_RATIO);
+  const dW = Math.round(dH * 0.5);
+
+  const img = await svgToImage(svgString, dW, dH);
+  if (!img) return;
+
+  const x = w - dW - DIAGRAM_PADDING;
+  const y = DIAGRAM_PADDING;
+
+  // 반투명 배경
+  ctx.save();
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = "#ffffff";
+  const radius = 10;
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + dW - radius, y);
+  ctx.quadraticCurveTo(x + dW, y, x + dW, y + radius);
+  ctx.lineTo(x + dW, y + dH - radius);
+  ctx.quadraticCurveTo(x + dW, y + dH, x + dW - radius, y + dH);
+  ctx.lineTo(x + radius, y + dH);
+  ctx.quadraticCurveTo(x, y + dH, x, y + dH - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1.0;
+  ctx.restore();
+
+  // SVG 다이어그램 그리기
+  ctx.drawImage(img, x, y, dW, dH);
+}
 
 function drawBrandBar(ctx, w, y, exercise, brand, analysis) {
   const { gymName, tagline, brandColor } = brand;
@@ -48,7 +131,7 @@ function drawBrandBar(ctx, w, y, exercise, brand, analysis) {
   ctx.textAlign = "left";
 }
 
-export function createCompositeCanvas(sourceCanvas, image, landmarks, exerciseKey, options, brand, analysis) {
+export async function createCompositeCanvas(sourceCanvas, image, landmarks, exerciseKey, options, brand, analysis) {
   const w = sourceCanvas.width;
   const h = sourceCanvas.height;
   const compositeCanvas = document.createElement("canvas");
@@ -58,6 +141,7 @@ export function createCompositeCanvas(sourceCanvas, image, landmarks, exerciseKe
 
   ctx.drawImage(image, 0, 0, w, h);
   renderMuscleOverlay(ctx, landmarks, exerciseKey, w, h, { ...options, time: 0 });
+  await drawDiagramOverlay(ctx, w, h, exerciseKey);
   drawBrandBar(ctx, w, h, exerciseKey, brand, analysis);
 
   return compositeCanvas;
@@ -97,9 +181,9 @@ export async function copyToClipboard(compositeCanvas) {
  * @param {Object} analysis - poseAnalyzer 결과
  * @returns {HTMLCanvasElement}
  */
-export function createWorstFrameComposite(worstFrame, exerciseKey, options, brand, analysis) {
+export async function createWorstFrameComposite(worstFrame, exerciseKey, options, brand, analysis) {
   const { canvas: frameCanvas, landmarks } = worstFrame;
-  return createCompositeCanvas(frameCanvas, frameCanvas, landmarks, exerciseKey, options, brand, analysis);
+  return await createCompositeCanvas(frameCanvas, frameCanvas, landmarks, exerciseKey, options, brand, analysis);
 }
 
 /**

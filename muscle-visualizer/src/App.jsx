@@ -196,10 +196,10 @@ export default function App() {
   }, [autoDetected, landmarks]);
 
   // -- Export functions --
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     if (!canvasRef.current || !image || !landmarks) return;
     const exerciseKey = selectedExercise === "auto" ? "squat" : selectedExercise;
-    const composite = createCompositeCanvas(
+    const composite = await createCompositeCanvas(
       canvasRef.current, image, landmarks, exerciseKey,
       { glowIntensity, showSkeleton, showLabels, muscleStatus: analysis?.muscleStatus || {} },
       brand, analysis
@@ -211,7 +211,7 @@ export default function App() {
   const handleCopy = useCallback(async () => {
     if (!canvasRef.current || !image || !landmarks) return;
     const exerciseKey = selectedExercise === "auto" ? "squat" : selectedExercise;
-    const composite = createCompositeCanvas(
+    const composite = await createCompositeCanvas(
       canvasRef.current, image, landmarks, exerciseKey,
       { glowIntensity, showSkeleton, showLabels, muscleStatus: analysis?.muscleStatus || {} },
       brand, analysis
@@ -230,10 +230,10 @@ export default function App() {
   }, []);
 
   // -- Video worst frame download --
-  const handleWorstFrameDownload = useCallback(() => {
+  const handleWorstFrameDownload = useCallback(async () => {
     if (!worstFrame) return;
     const exerciseKey = selectedExercise === "auto" ? (autoDetected?.key || "squat") : selectedExercise;
-    const composite = createWorstFrameComposite(
+    const composite = await createWorstFrameComposite(
       worstFrame, exerciseKey,
       { glowIntensity, showSkeleton, showLabels, muscleStatus: analysis?.muscleStatus || {} },
       brand, analysis
