@@ -2,7 +2,7 @@ import { EXERCISE_DB } from "../data/exercises";
 import { MUSCLE_REGIONS } from "../data/muscles";
 import { renderMuscleOverlay } from "./muscleRenderer";
 import { getScoreColor } from "./poseAnalyzer";
-import { renderFrontBodySVG, renderBackBodySVG } from "./bodyDiagram.render";
+import { renderFrontBodySVG, renderBackBodySVG } from "./bodyDiagram";
 
 const BRAND_BAR_HEIGHT = 60;
 
